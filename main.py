@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    BarColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
 from utils.display import display_results
 from utils.evaluator import evaluate_submission
@@ -25,13 +32,24 @@ def main() -> None:
         return
 
     results: List[Dict[str, Any]] = []
-    for code_path in submissions:
-        logger.info("Evaluating %s", code_path)
-        try:
-            evaluation = evaluate_submission(code_path, question, rubric)
-            results.append(evaluation)
-        except Exception as exc:
-            logger.exception("Failed to evaluate %s: %s", code_path, exc)
+    with Progress(
+        SpinnerColumn(style="white"),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total}"),
+        TimeElapsedColumn(),
+        transient=True,
+    ) as progress:
+        task_id = progress.add_task("Evaluating submissions", total=len(submissions))
+        for code_path in submissions:
+            progress.log(f"Evaluating {code_path}")
+            try:
+                evaluation = evaluate_submission(code_path, question, rubric)
+                results.append(evaluation)
+            except Exception as exc:
+                logger.exception("Failed to evaluate %s: %s", code_path, exc)
+            finally:
+                progress.advance(task_id)
 
     if not results:
         logger.warning("No evaluation results to display")

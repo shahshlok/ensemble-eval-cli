@@ -12,26 +12,26 @@ console = Console()
 
 def display_results(rows: List[Dict[str, Any]], summary: Dict[str, Any]) -> None:
     """Render a colorized comparison table and summary stats."""
-    table = Table(title="Ensembling Method Evaluation", box=box.SIMPLE_HEAVY, highlight=True)
-    table.add_column("Student", style="bold cyan")
+    # Black-and-white table (no color styles)
+    table = Table(title="Ensembling Method Evaluation", box=box.SIMPLE_HEAVY, highlight=False)
+    table.add_column("Student")
     table.add_column("GPT-5", justify="right")
     table.add_column("EduAI", justify="right")
     table.add_column("Avg", justify="right")
     table.add_column("Diff %", justify="right")
     table.add_column("Flag")
-    table.add_column("Comment", style="dim")
+    table.add_column("Comment")
 
     for row in rows:
         metrics = row.get("metrics", {})
         flag = metrics.get("flag", "")
-        flag_style = "green" if flag == "✅" else ("red" if flag == "🚩" else "yellow")
         table.add_row(
             row.get("student", "Unknown"),
             _fmt_score(metrics.get("gpt5", {})),
             _fmt_score(metrics.get("eduai", {})),
             _fmt_pct(metrics.get("avg_pct")),
             _fmt_pct(metrics.get("diff_pct")),
-            f"[{flag_style}]{flag}[/{flag_style}]" if flag else "",
+            flag or "",
             metrics.get("comment", ""),
         )
 
@@ -41,7 +41,7 @@ def display_results(rows: List[Dict[str, Any]], summary: Dict[str, Any]) -> None
         f"Mean diff: {_fmt_pct(summary.get('mean_diff_pct'))} | "
         f"Flags: {summary.get('flagged_count', 0)}/{summary.get('total', 0)}"
     )
-    console.print(f"[bold magenta]{summary_msg}[/bold magenta]")
+    console.print(summary_msg)
 
 
 def _fmt_score(payload: Dict[str, Any]) -> str:
