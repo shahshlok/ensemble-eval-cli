@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+
+from utils.display import display_results
+from utils.evaluator import evaluate_submission
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
+logger = logging.getLogger(__name__)
+
+
+def main() -> None:
+    load_dotenv()
+    question, rubric = _load_question_and_rubric()
+
+    submissions = _discover_submissions(Path("student_submissions"))
+    if not submissions:
+        logger.warning("No .java submissions found under student_submissions/")
+        return
+
+    results: List[Dict[str, Any]] = []
+    for code_path in submissions:
+        logger.info("Evaluating %s", code_path)
+        try:
+            evaluation = evaluate_submission(code_path, question, rubric)
+            results.append(evaluation)
+        except Exception as exc:
+            logger.exception("Failed to evaluate %s: %s", code_path, exc)
+
+    if not results:
+        logger.warning("No evaluation results to display")
+        return
+
+    summary = _build_summary(results)
+    display_results(results, summary)
+    _dump_results(results)
+
+
+def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
+    question = os.getenv("QUESTION")
+    rubric_raw = os.getenv("RUBRIC")
+    if not question:
+        raise RuntimeError("QUESTION is not set in the environment")
+    if not rubric_raw:
+        raise RuntimeError("RUBRIC is not set in the environment")
+
+    try:
+        rubric = json.loads(rubric_raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("RUBRIC must be valid JSON") from exc
+    return question, rubric
+
+
+def _discover_submissions(root: Path) -> List[Path]:
+    return sorted(root.rglob("*.java"))
+
+
+def _build_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    diffs = [res["metrics"].get("diff_pct") for res in results if res.get("metrics", {}).get("diff_pct") is not None]
+    mean_diff = sum(diffs) / len(diffs) if diffs else None
+    flagged = sum(1 for res in results if res.get("metrics", {}).get("flag") == "🚩")
+    return {
+        "mean_diff_pct": mean_diff,
+        "flagged_count": flagged,
+        "total": len(results),
+    }
+
+
+def _dump_results(results: List[Dict[str, Any]]) -> None:
+    data_dir = Path("data")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    output_path = data_dir / "results.json"
+    output_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    logger.info("Saved raw results to %s", output_path)
+
+
+if __name__ == "__main__":
+    main()
