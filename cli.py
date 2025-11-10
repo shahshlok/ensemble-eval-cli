@@ -238,17 +238,18 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
     # Calculate summary statistics
     summary = _build_summary(results)
 
-    # Create results table
+    # Create results table - minimal, clean design
     table = Table(
         title=f"{mode.upper()} Grading Results",
-        box=box.ROUNDED,
+        box=box.SIMPLE,
         show_header=True,
-        header_style="bold cyan",
+        header_style="bold",
+        border_style="dim",
     )
-    table.add_column("Student", style="white")
-    table.add_column("GPT-5", justify="right", style="blue")
-    table.add_column("EduAI", justify="right", style="magenta")
-    table.add_column("Avg %", justify="right", style="cyan")
+    table.add_column("Student")
+    table.add_column("GPT-5", justify="right")
+    table.add_column("EduAI", justify="right")
+    table.add_column("Avg %", justify="right")
     table.add_column("Diff %", justify="right")
     table.add_column("Flag", justify="center")
     table.add_column("Comment", style="dim")
@@ -258,15 +259,18 @@ def _display_mode_results(mode: str, results: List[Dict[str, Any]]) -> None:
         flag = metrics.get("flag", "")
         diff_pct = metrics.get("diff_pct")
 
-        # Color code the diff based on severity
-        diff_style = "green" if flag == "✅" else "red"
+        # Only color the diff % when flagged (red = disagreement)
+        if flag == "✅":
+            diff_str = _fmt_pct(diff_pct)
+        else:
+            diff_str = f"[red]{_fmt_pct(diff_pct)}[/red]"
 
         table.add_row(
             result.get("student", "Unknown"),
             _fmt_score(metrics.get("gpt5", {})),
             _fmt_score(metrics.get("eduai", {})),
             _fmt_pct(metrics.get("avg_pct")),
-            f"[{diff_style}]{_fmt_pct(diff_pct)}[/{diff_style}]",
+            diff_str,
             flag,
             metrics.get("comment", ""),
         )
@@ -283,21 +287,21 @@ def _display_summary(mode: str, summary: Dict[str, Any]) -> None:
     mean_diff = summary.get("mean_diff_pct")
     flagged = summary.get("flagged_count", 0)
     total = summary.get("total", 0)
+    agreement_rate = ((total - flagged) / total * 100) if total > 0 else 0
 
-    summary_text = f"""
-[bold]Summary for {mode.upper()}:[/bold]
+    summary_text = f"""Summary for {mode.upper()}:
   Mean difference: {_fmt_pct(mean_diff)}
   Flagged: {flagged}/{total} submissions
-  Agreement rate: {((total - flagged) / total * 100) if total > 0 else 0:.1f}%
+  Agreement rate: {agreement_rate:.1f}%
 """
-    console.print(Panel(summary_text, border_style="cyan", padding=(0, 2)))
+    console.print(Panel(summary_text, border_style="dim", padding=(0, 2)))
 
 
 def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any]]]) -> None:
     """Display comparison across all paradigms."""
-    console.print("\n" + "=" * 80)
-    console.print("[bold magenta]CROSS-PARADIGM COMPARISON[/bold magenta]")
-    console.print("=" * 80 + "\n")
+    console.print("\n" + "─" * 80)
+    console.print("CROSS-PARADIGM COMPARISON")
+    console.print("─" * 80 + "\n")
 
     # Aggregate statistics
     stats = {}
@@ -308,11 +312,12 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     # Create comparison table
     table = Table(
         title="Paradigm Comparison",
-        box=box.DOUBLE_EDGE,
+        box=box.SIMPLE,
         show_header=True,
-        header_style="bold magenta",
+        header_style="bold",
+        border_style="dim",
     )
-    table.add_column("Paradigm", style="cyan")
+    table.add_column("Paradigm")
     table.add_column("Mean Diff %", justify="right")
     table.add_column("Flagged", justify="right")
     table.add_column("Agreement Rate", justify="right")
@@ -351,9 +356,9 @@ def _display_cross_paradigm_comparison(all_results: Dict[str, List[Dict[str, Any
     console.print(table)
 
     # Research insights
-    console.print("\n[bold cyan]Research Insights:[/bold cyan]")
+    console.print("\nResearch Insights:")
     best_mode = min(stats.items(), key=lambda x: x[1].get("mean_diff_pct", float("inf")))
-    console.print(f"  • Lowest variance: [green]{best_mode[0].upper()}[/green] ({_fmt_pct(best_mode[1].get('mean_diff_pct'))})")
+    console.print(f"  • Lowest variance: {best_mode[0].upper()} ({_fmt_pct(best_mode[1].get('mean_diff_pct'))})")
 
     overall_gpt5 = sum(
         1
