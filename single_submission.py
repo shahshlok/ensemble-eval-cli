@@ -57,7 +57,8 @@ def main() -> None:
         _print_raw_payloads(result)
 
     if args.dump_json:
-        Path(args.dump_json).write_text(json.dumps(result, indent=2), encoding="utf-8")
+        cleaned = _clean_result(result)
+        Path(args.dump_json).write_text(json.dumps(cleaned, indent=2), encoding="utf-8")
         logger.info("Wrote raw result to %s", args.dump_json)
 
 
@@ -149,6 +150,23 @@ def _build_summary(results: list[Dict[str, Any]]) -> Dict[str, Any]:
     mean_diff = sum(diffs) / len(diffs) if diffs else None
     flagged = sum(1 for res in results if res.get("metrics", {}).get("flag") == "🚩")
     return {"mean_diff_pct": mean_diff, "flagged_count": flagged, "total": len(results)}
+
+
+def _clean_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip down to essentials: student name and clean model responses."""
+    def clean_response(response: Any) -> Any:
+        if response is None:
+            return None
+        if not isinstance(response, dict):
+            return response
+        # Remove internal metadata fields (those starting with _)
+        return {k: v for k, v in response.items() if not k.startswith("_")}
+
+    return {
+        "student": result.get("student"),
+        "gpt5_result": clean_response(result.get("gpt5_result")),
+        "eduai_result": clean_response(result.get("eduai_result")),
+    }
 
 
 if __name__ == "__main__":

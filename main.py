@@ -90,11 +90,34 @@ def _build_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _clean_response(response: Any) -> Any:
+    """Remove metadata fields from model responses, keeping only the core output."""
+    if response is None:
+        return None
+    if not isinstance(response, dict):
+        return response
+
+    # Create a copy and remove internal metadata fields
+    cleaned = {k: v for k, v in response.items() if not k.startswith("_")}
+    return cleaned
+
+
 def _dump_results(results: List[Dict[str, Any]]) -> None:
     data_dir = Path("data")
     data_dir.mkdir(parents=True, exist_ok=True)
     output_path = data_dir / "results.json"
-    output_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+
+    # Strip down to essentials: student name and clean model responses
+    cleaned_results = []
+    for result in results:
+        cleaned = {
+            "student": result.get("student"),
+            "gpt5_result": _clean_response(result.get("gpt5_result")),
+            "eduai_result": _clean_response(result.get("eduai_result")),
+        }
+        cleaned_results.append(cleaned)
+
+    output_path.write_text(json.dumps(cleaned_results, indent=2), encoding="utf-8")
     logger.info("Saved raw results to %s", output_path)
 
 
