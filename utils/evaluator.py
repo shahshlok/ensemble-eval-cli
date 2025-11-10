@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, Optional
@@ -12,9 +13,33 @@ from .ai_clients import get_eduai_eval_async, get_openai_eval
 
 logger = logging.getLogger(__name__)
 
+# Optional rate limiting for student-level concurrency
+_student_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_student_semaphore() -> Optional[asyncio.Semaphore]:
+    """Get or create the student rate limit semaphore based on MAX_CONCURRENT_STUDENTS env variable."""
+    global _student_semaphore
+    if _student_semaphore is None:
+        max_concurrent = os.getenv("MAX_CONCURRENT_STUDENTS")
+        if max_concurrent and max_concurrent.isdigit():
+            limit = int(max_concurrent)
+            logger.info("Student rate limiting enabled: max %d concurrent student evaluations", limit)
+            _student_semaphore = asyncio.Semaphore(limit)
+    return _student_semaphore
+
 
 async def evaluate_submission(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
     """Evaluate a single Java submission with both GPT-5 and EduAI in parallel."""
+    semaphore = _get_student_semaphore()
+    if semaphore:
+        async with semaphore:
+            return await _evaluate_submission_impl(code_path, question, rubric)
+    return await _evaluate_submission_impl(code_path, question, rubric)
+
+
+async def _evaluate_submission_impl(code_path: Path, question: str, rubric: Dict[str, Any]) -> Dict[str, Any]:
+    """Internal implementation of evaluate_submission."""
     student = code_path.parent.name or code_path.stem
     student_code = code_path.read_text(encoding="utf-8")
     prompt = build_eme_prompt(question, rubric, student_code)

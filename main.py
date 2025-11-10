@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
+    """Entry point that runs the async main pipeline."""
+    asyncio.run(main_async())
+
+
+async def main_async() -> None:
+    """Main async pipeline that evaluates all submissions concurrently."""
     load_dotenv()
     question, rubric = _load_question_and_rubric()
 
@@ -33,6 +39,10 @@ def main() -> None:
         return
 
     results: List[Dict[str, Any]] = []
+
+    # Create all evaluation tasks upfront
+    tasks = [evaluate_submission(code_path, question, rubric) for code_path in submissions]
+
     with Progress(
         SpinnerColumn(style="white"),
         TextColumn("[progress.description]{task.description}"),
@@ -42,14 +52,15 @@ def main() -> None:
         transient=True,
     ) as progress:
         task_id = progress.add_task("Evaluating submissions", total=len(submissions))
-        for code_path in submissions:
-            progress.log(f"Evaluating {code_path}")
+
+        # Process tasks as they complete for real-time progress updates
+        for coro in asyncio.as_completed(tasks):
             try:
-                # Run the async evaluation (GPT-5 and EduAI in parallel)
-                evaluation = asyncio.run(evaluate_submission(code_path, question, rubric))
+                evaluation = await coro
                 results.append(evaluation)
+                progress.log(f"Completed {evaluation.get('student', 'Unknown')}")
             except Exception as exc:
-                logger.exception("Failed to evaluate %s: %s", code_path, exc)
+                logger.exception("Failed to evaluate submission: %s", exc)
             finally:
                 progress.advance(task_id)
 
