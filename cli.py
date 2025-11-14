@@ -27,9 +27,13 @@ from rich.table import Table
 from modes.direct_grading import run_direct_grading
 from modes.eme_grading import run_eme_grading
 from modes.reverse_grading import run_reverse_grading
+from db import manager as db_manager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
+
+# Default database path
+DB_PATH = "evaluations.db"
 
 app = typer.Typer(help="EduBench: Unified AI Grading Benchmark")
 console = Console()
@@ -291,12 +295,20 @@ def _run_analysis_menu() -> None:
 
 def _restore_json_from_db() -> None:
     """Restore JSON files from the database to the data/ directory."""
-    console.print("\n[bold cyan]Restoring JSON files from database...[/bold cyan]")
+    console.print("\n[bold cyan]Restoring JSON files from database...[/bold cyan]\n")
 
-    # TODO: This will be implemented when the database layer is added
-    # For now, just show a placeholder message
-    console.print("[yellow]Database functionality not yet implemented.[/yellow]")
-    console.print("[dim]This will restore all evaluation JSON files from the SQLite database to the data/ directory.[/dim]\n")
+    try:
+        data_dir = Path("data")
+        files_restored = db_manager.restore_json_files(DB_PATH, data_dir, validate=False)
+
+        console.print(f"[green]✓[/green] Successfully restored {files_restored} file(s) to {data_dir}/")
+        console.print(f"[dim]All evaluation results have been exported from the database.[/dim]\n")
+
+    except FileNotFoundError:
+        console.print("[yellow]No database found. Run a benchmark first to create the database.[/yellow]\n")
+    except Exception as e:
+        console.print(f"[red]Error restoring files: {e}[/red]\n")
+        logger.exception("Failed to restore JSON files from database")
 
 
 def _load_question_and_rubric() -> tuple[str, Dict[str, Any]]:
@@ -508,7 +520,7 @@ def _fmt_pct(value: Any) -> str:
 
 
 def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
-    """Save results to a JSON file with ISO date timestamp."""
+    """Save results to a JSON file with ISO date timestamp and ingest into database."""
     data_dir = Path("data")
     data_dir.mkdir(parents=True, exist_ok=True)
     iso_date = datetime.now().isoformat(timespec="seconds").replace(":", "-")
@@ -527,6 +539,15 @@ def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
 
     output_path.write_text(json.dumps(cleaned_results, indent=2), encoding="utf-8")
     logger.info("Saved %s results to %s", mode.upper(), output_path)
+
+    # Automatically ingest into database
+    try:
+        db_manager.init_db(DB_PATH)
+        db_manager.ingest_results_file(DB_PATH, output_path)
+        logger.info("Ingested results into database")
+    except Exception as e:
+        logger.error(f"Failed to ingest results into database: {e}")
+        console.print(f"[yellow]Warning: Could not save to database: {e}[/yellow]")
 
 
 def _clean_response(response: Any) -> Any:

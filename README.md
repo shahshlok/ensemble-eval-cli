@@ -1,16 +1,353 @@
-# EME Testing (Lean Branch)
+# EduBench: AI Grading Benchmark
 
-Minimal harness for generating evaluation JSON files for student submissions and (in this
-branch) moving toward a lean SQLite-backed store for those JSON records.
+A comprehensive benchmarking system for comparing GPT-5 Nano and GPT-OSS 120B grading strategies on student code submissions. Features automatic result persistence via SQLite and a rich CLI interface.
 
-## Current Pieces
+---
 
-- `modes/` – grading strategies (direct, reverse, EME) that produce JSON results under `data/`.
-- `data/` – evaluation JSON files (arrays of per-student records).
-- `evaluation_schema.json` – JSON Schema describing the expected evaluation structure.
-- `utils/validation.py` – reusable validation helpers (no DB coupling).
-- `validate_data.py` – tiny CLI wrapper around the validation helpers.
-- `LEAN_DB_PLAN.md` – design notes for the new lean SQLite layer (not implemented yet).
+## Quick Start
 
-If you don’t care about the CLI, you can ignore `validate_data.py` and import
-`utils.validation.validate_json_file` directly in your own scripts.
+### Run a Benchmark
+
+```bash
+# Interactive mode
+uv run edubench benchmark
+
+# Direct command
+uv run edubench benchmark --mode direct
+```
+
+### Access Your Results
+
+```bash
+# Launch analysis menu
+uv run edubench benchmark
+# Select option [5] Analysis
+# Select option [1] Restore JSON from Database
+```
+
+---
+
+## Features
+
+✅ **Three Grading Strategies**
+- **Direct Grading**: Grade student code directly against rubric
+- **Reverse Grading**: Generate ideal solution first, then compare
+- **Ensemble (EME)**: Multi-model ensemble approach from RIAYN paper
+
+✅ **Automatic Database Persistence**
+- All benchmark results automatically stored in SQLite
+- JSON files remain as temporary workspace for ad-hoc analysis
+- Validated JSON in, validated JSON out
+
+✅ **Rich CLI Interface**
+- Interactive menu system
+- Real-time progress bars
+- Beautiful result tables with Rich library
+- Cross-strategy comparison views
+
+✅ **Data Validation**
+- JSON Schema validation on all results
+- Business rule checks (metrics calculations)
+- Graceful error handling
+
+---
+
+## Project Structure
+
+```
+EME_testing/
+├── cli.py                   # Main CLI application (edubench command)
+├── modes/                   # Grading strategies
+│   ├── direct_grading.py    # Direct rubric-based grading
+│   ├── reverse_grading.py   # Reference solution comparison
+│   └── eme_grading.py       # Ensemble method
+├── db/                      # Database layer
+│   ├── schema.sql           # SQLite schema (runs + evaluations tables)
+│   └── manager.py           # Database operations (init, ingest, restore)
+├── utils/                   # Shared utilities
+│   ├── validation.py        # JSON validation helpers
+│   ├── evaluator.py         # Core evaluation logic
+│   └── ai_clients.py        # LLM client interfaces
+├── prompts/                 # Grading prompt templates
+├── docs/                    # Documentation
+│   └── DATABASE.md          # Detailed database documentation
+├── data/                    # Temporary JSON workspace
+├── student_submissions/     # Input code submissions
+├── evaluation_schema.json   # JSON Schema for validation
+├── evaluations.db           # SQLite database (auto-created)
+└── LEAN_DB_PLAN.md          # Original design document
+```
+
+---
+
+## Database System
+
+### Overview
+
+The database automatically captures all benchmark runs for persistence and historical analysis without changing the JSON-based workflow.
+
+**Philosophy**: "Validated JSON in, validated JSON out"
+
+### Schema
+
+- **`runs` table**: Tracks each evaluation run (timestamp, filename, strategy)
+- **`evaluations` table**: Stores individual student evaluations as JSON text
+
+### Automatic Ingestion
+
+Every benchmark run automatically:
+1. Saves results to `data/results_{strategy}_{timestamp}.json`
+2. Validates against `evaluation_schema.json`
+3. Ingests into SQLite database (`evaluations.db`)
+
+### Restoration
+
+Restore all JSON files from database to `data/` directory:
+
+```bash
+uv run edubench benchmark
+# Select [5] Analysis → [1] Restore JSON from Database
+```
+
+Or programmatically:
+
+```python
+from db.manager import restore_json_files
+from pathlib import Path
+
+files_restored = restore_json_files("evaluations.db", Path("data"))
+```
+
+### Documentation
+
+📚 **[Complete Database Documentation](docs/DATABASE.md)**
+
+Covers:
+- Architecture and schema design
+- API reference for `db/manager.py`
+- Validation workflow
+- Usage examples and recipes
+- Error handling and troubleshooting
+- Future enhancements
+
+---
+
+## CLI Commands
+
+### Benchmark Command
+
+```bash
+# Interactive mode (recommended)
+uv run edubench benchmark
+
+# With flags
+uv run edubench benchmark --mode direct
+uv run edubench benchmark --mode all      # Run all strategies
+uv run edubench benchmark --advanced      # Show per-student progress
+```
+
+**Available Modes**:
+- `direct` - Direct grading against rubric
+- `reverse` - Generate reference solution first
+- `eme` - Ensemble method
+- `all` - Run all three strategies and compare
+
+### Analysis Menu
+
+Access from the main menu (option 5) or when running benchmarks:
+
+**Options**:
+1. **Restore JSON from Database** - Export all evaluation results to `data/`
+2. **Back to Main Menu** - Return to benchmark selection
+
+---
+
+## Validation
+
+All evaluation results are validated before database storage:
+
+### JSON Schema Validation
+- Field types and required fields
+- Nested structure validation
+- Score ranges (0-100%)
+
+### Business Rule Validation
+- `avg_pct` must match calculated average
+- `diff_pct` must match absolute difference
+- Student identifiers must be non-empty
+
+**Example Validation Output**:
+```
+✓ Validation passed
+
+OR
+
+✗ Validation failed with 2 error(s)
+
+Errors:
+  1. Record 3 (student: Smith_John_123456):
+     - avg_pct (57.5) doesn't match calculated average (58.00)
+  2. Record 5: Missing required field 'metrics'
+```
+
+If validation fails, the file is **not ingested** (database remains consistent), but the JSON file is still saved to `data/`.
+
+---
+
+## Development
+
+### Installation
+
+```bash
+# Clone repository
+git clone <repo-url>
+cd EME_testing
+
+# Install dependencies
+uv sync
+```
+
+### Project Dependencies
+
+- `typer` - CLI framework
+- `rich` - Terminal UI and formatting
+- `jsonschema` - JSON validation
+- `openai` / LLM clients - Model interactions
+- `sqlite3` - Built-in Python (no install needed)
+
+### Testing
+
+```bash
+# Test database ingestion
+python -c "
+from pathlib import Path
+from db.manager import DatabaseManager
+
+db = DatabaseManager()
+db.init_db()
+
+for f in Path('data').glob('results_*.json'):
+    db.ingest_results_file(f)
+    print(f'✓ Ingested {f.name}')
+"
+
+# Test restoration
+python -c "
+from pathlib import Path
+from db.manager import restore_json_files
+
+count = restore_json_files('evaluations.db', Path('data'))
+print(f'✓ Restored {count} files')
+"
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file:
+
+```env
+QUESTION="Write a Java program that computes the sum of integers from 1 to 100."
+
+RUBRIC='{
+  "correctness": {"weight": 40, "description": "Program produces correct output"},
+  "compilation": {"weight": 20, "description": "Code compiles without errors"},
+  "style": {"weight": 20, "description": "Code follows conventions"},
+  "documentation": {"weight": 20, "description": "Adequate comments"}
+}'
+
+# API Keys
+OPENAI_API_KEY=sk-...
+```
+
+---
+
+## Output Format
+
+### Evaluation JSON Structure
+
+Each evaluation file (`data/results_{strategy}_{timestamp}.json`) contains an array:
+
+```json
+[
+  {
+    "student": "Smith_John_123456",
+    "gpt5_nano_result": {
+      "total_score": 95,
+      "max_possible_score": 100,
+      "overall_feedback": "Excellent work..."
+    },
+    "gpt_oss_120b_result": {
+      "total_score": 90,
+      "max_possible_score": 100,
+      "overall_feedback": "Good implementation..."
+    },
+    "metrics": {
+      "gpt5_nano": {"total": 95.0, "max": 100.0, "pct": 95.0},
+      "gpt_oss_120b": {"total": 90.0, "max": 100.0, "pct": 90.0},
+      "avg_pct": 92.5,
+      "diff_pct": 5.0,
+      "flag": "✅",
+      "comment": "Models agree within tolerance"
+    }
+  }
+]
+```
+
+### Database Storage
+
+- **Runs**: Metadata about each benchmark run
+- **Evaluations**: Individual student results stored as JSON text
+- **Indexes**: Optimized for querying by student or run
+
+---
+
+## Future Enhancements
+
+Potential features (see [DATABASE.md](docs/DATABASE.md#future-enhancements) for details):
+
+- Query interface for database (`uv run edubench query --student "Smith_John"`)
+- Statistics dashboard across all runs
+- Export filters (by strategy, date range, student)
+- Run comparison tool
+- Annotation system for manual notes
+- JSONB virtual columns for advanced queries
+
+---
+
+## Contributing
+
+When adding features:
+
+1. **Follow separation of concerns**:
+   - CLI logic in `cli.py`
+   - Database operations in `db/manager.py`
+   - Grading strategies in `modes/`
+   - Shared utilities in `utils/`
+
+2. **Maintain validation**:
+   - Update `evaluation_schema.json` for schema changes
+   - Add business rules to `utils/validation.py`
+
+3. **Document changes**:
+   - Update relevant docs in `docs/`
+   - Add docstrings to all functions
+   - Include usage examples
+
+4. **Test database operations**:
+   - Verify round-trip integrity (ingest → restore)
+   - Test validation with invalid data
+   - Check error handling
+
+---
+
+## License
+
+[Your License Here]
+
+## Contact
+
+[Your Contact Info Here]
