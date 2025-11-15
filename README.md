@@ -10,17 +10,17 @@ A comprehensive benchmarking system for comparing GPT-5 Nano and GPT-OSS 120B gr
 
 ```bash
 # Interactive mode
-uv run edubench benchmark
+uv run bench benchmark
 
 # Direct command
-uv run edubench benchmark --mode direct
+uv run bench benchmark --mode direct
 ```
 
 ### Access Your Results
 
 ```bash
 # Launch analysis menu
-uv run edubench benchmark
+uv run bench benchmark
 # Select option [5] Analysis
 # Select option [1] Restore JSON from Database
 ```
@@ -52,31 +52,29 @@ uv run edubench benchmark
 
 ---
 
-## Project Structure
+## Project Structure (High-Level)
 
-```
+```text
 EME_testing/
-├── cli.py                   # Main CLI application (edubench command)
-├── modes/                   # Grading strategies
-│   ├── direct_grading.py    # Direct rubric-based grading
-│   ├── reverse_grading.py   # Reference solution comparison
-│   └── eme_grading.py       # Ensemble method
-├── db/                      # Database layer
-│   ├── schema.sql           # SQLite schema (runs + evaluations tables)
-│   └── manager.py           # Database operations (init, ingest, restore)
-├── utils/                   # Shared utilities
-│   ├── validation.py        # JSON validation helpers
-│   ├── evaluator.py         # Core evaluation logic
-│   └── ai_clients.py        # LLM client interfaces
+├── cli.py                   # Main CLI application (bench command)
+├── single_submission.py     # One-off EME run for a single student
+├── modes/                   # Grading strategies (direct / reverse / EME)
 ├── prompts/                 # Grading prompt templates
-├── docs/                    # Documentation
-│   └── DATABASE.md          # Detailed database documentation
-├── data/                    # Temporary JSON workspace
-├── student_submissions/     # Input code submissions
+├── utils/                   # Shared utilities (models, evaluation, validation, display)
+├── db/                      # SQLite schema + database manager
+├── docs/                    # Documentation hub (see below)
+├── data/                    # Temporary JSON workspace (results_*.json)
+├── student_submissions/     # Input code submissions (.java)
 ├── evaluation_schema.json   # JSON Schema for validation
-├── evaluations.db           # SQLite database (auto-created)
-└── LEAN_DB_PLAN.md          # Original design document
+└── evaluations.db           # SQLite database (auto-created)
 ```
+
+For a **beginner‑friendly tour of the codebase**, diagrams, and detailed examples, see:
+
+- `docs/INDEX.md` – docs hub and quickstart
+- `docs/ARCHITECTURE.md` – pipeline diagrams and module map
+- `docs/DATABASE.md` – database schema and ingestion
+- `docs/JSON_OUTPUT.md` – structured JSON outputs from models
 
 ---
 
@@ -105,7 +103,7 @@ Every benchmark run automatically:
 Restore all JSON files from database to `data/` directory:
 
 ```bash
-uv run edubench benchmark
+uv run bench benchmark
 # Select [5] Analysis → [1] Restore JSON from Database
 ```
 
@@ -138,12 +136,12 @@ Covers:
 
 ```bash
 # Interactive mode (recommended)
-uv run edubench benchmark
+uv run bench benchmark
 
 # With flags
-uv run edubench benchmark --mode direct
-uv run edubench benchmark --mode all      # Run all strategies
-uv run edubench benchmark --advanced      # Show per-student progress
+uv run bench benchmark --mode direct
+uv run bench benchmark --mode all      # Run all strategies
+uv run bench benchmark --advanced      # Show per-student progress
 ```
 
 **Available Modes**:
@@ -261,6 +259,11 @@ RUBRIC='{
 
 # API Keys
 OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=google/gemini-2.5-flash-preview-09-2025
+# Optional analytics headers for OpenRouter rankings (can be left unset)
+# OPENROUTER_SITE_URL=https://your-app-url.com
+# OPENROUTER_SITE_NAME=Your App Name
 ```
 
 ---
@@ -309,7 +312,7 @@ Each evaluation file (`data/results_{strategy}_{timestamp}.json`) contains an ar
 
 Potential features (see [DATABASE.md](docs/DATABASE.md#future-enhancements) for details):
 
-- Query interface for database (`uv run edubench query --student "Smith_John"`)
+- Query interface for database (`uv run bench query --student "Smith_John"`)
 - Statistics dashboard across all runs
 - Export filters (by strategy, date range, student)
 - Run comparison tool

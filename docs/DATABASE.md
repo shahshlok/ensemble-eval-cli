@@ -215,7 +215,7 @@ def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
 ```
 
 **User Experience**:
-- Users run: `uv run edubench benchmark`
+- Users run: `uv run bench benchmark`
 - Results saved to both `data/` (temporary) and database (persistent)
 - No manual database commands required
 
@@ -230,7 +230,7 @@ def _save_results(mode: str, results: List[Dict[str, Any]]) -> None:
 Access database features through the CLI:
 
 ```bash
-uv run edubench benchmark
+uv run bench benchmark
 # Select option [5] Analysis
 # Select option [1] Restore JSON from Database
 ```
@@ -374,7 +374,7 @@ ORDER BY r.run_timestamp;
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Benchmark Execution                     │
-│                  (uv run edubench benchmark)                │
+│                  (uv run bench benchmark)                │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -417,7 +417,7 @@ ORDER BY r.run_timestamp;
 
 ┌─────────────────────────────────────────────────────────────┐
 │                      Analysis Mode                          │
-│              (uv run edubench → Option 5 → 1)               │
+│              (uv run bench → Option 5 → 1)               │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -528,12 +528,12 @@ Errors:
 
 1. **Query Interface**: CLI command to query database directly
    ```bash
-   uv run edubench query --strategy direct --student "Smith_John_123456"
+   uv run bench query --strategy direct --student "Smith_John_123456"
    ```
 
 2. **Statistics Dashboard**: Summary stats across all runs
    ```bash
-   uv run edubench stats
+   uv run bench stats
    # Shows: total runs, evaluations, mean scores by strategy, etc.
    ```
 
@@ -544,7 +544,7 @@ Errors:
 
 4. **Comparison Tool**: Compare specific runs
    ```bash
-   uv run edubench compare --run1 42 --run2 43
+   uv run bench compare --run1 42 --run2 43
    ```
 
 5. **JSONB Virtual Columns**: For advanced queries (requires SQLite 3.31+)
@@ -558,7 +558,7 @@ Errors:
 
 7. **Annotations**: Add manual notes to runs via CLI
    ```bash
-   uv run edubench annotate --run 42 --note "Baseline run with default prompts"
+   uv run bench annotate --run 42 --note "Baseline run with default prompts"
    ```
 
 ### Migration Strategy
