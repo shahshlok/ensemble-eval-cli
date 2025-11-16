@@ -36,36 +36,36 @@ Welcome to the Ensemble Model Evaluation (EME) Framework documentation! This is 
 
 ---
 
-## 📖 Complete Documentation Map
+## 📖 Documentation Map
+
+### ✅ Available Now
 
 ```
 docs/
 ├── INDEX.md                    ← You are here
+├── GETTING_STARTED.md          ✅ Installation, first steps, examples
+├── SCHEMA_GUIDE.md             ✅ JSON structure, database schema quick reference
+├── MIGRATION_GUIDE.md          ✅ v1 → v2 migration guide
 │
-├── Getting Started
-│   ├── GETTING_STARTED.md      # Installation, first steps, examples
-│   └── QUICK_REFERENCE.md      # Command cheat sheet
+├── [Legacy v1 Docs]
+│   ├── ARCHITECTURE.md         📝 System design (needs v2 update)
+│   ├── DATABASE.md             📝 Database docs (v1, being updated)
+│   ├── JSON_OUTPUT.md          📝 Old JSON format (deprecated)
+│   └── later_CLI_PROVIDER_PLAN.md  📝 Future plans
 │
-├── Core Concepts
-│   ├── ARCHITECTURE.md         # System design, data flow, modules
-│   ├── SCHEMA_GUIDE.md         # JSON structure, database schema
-│   └── CONCEPTS.md             # Key terminology and ideas
-│
-├── Developer Guides
-│   ├── IMPLEMENTATION_GUIDE.md # Building features, adding providers
-│   ├── API_REFERENCE.md        # Function/class documentation
-│   └── TESTING.md              # Testing guide
-│
-├── Research & Analysis
-│   ├── RESEARCH_GUIDE.md       # Using EME for research
-│   ├── METRICS_EXPLAINED.md    # Statistical metrics guide
-│   └── EXAMPLES.md             # Research examples and workflows
-│
-└── Operations
-    ├── MIGRATION_GUIDE.md      # v1 → v2 migration
-    ├── DEPLOYMENT.md           # Production setup
-    └── TROUBLESHOOTING.md      # Common issues and solutions
+└── [External Docs]
+    ├── ../SCHEMA_DOCUMENTATION.md   ✅ Complete schema reference
+    ├── ../example.jsonc             ✅ Fully annotated example
+    └── ../README.md                 ✅ Project overview
 ```
+
+### 📋 Planned for Future
+
+- `IMPLEMENTATION_GUIDE.md` - Building features, adding providers
+- `RESEARCH_GUIDE.md` - Using EME for research workflows
+- `API_REFERENCE.md` - Function/class documentation
+- `CONCEPTS.md` - Key terminology and ideas
+- `TROUBLESHOOTING.md` - Common issues and solutions
 
 ---
 
@@ -206,29 +206,15 @@ See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
 
 | I want to... | Go to... |
 |-------------|----------|
-| Install and run my first evaluation | [GETTING_STARTED.md#installation](GETTING_STARTED.md#installation) |
-| Understand the system architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Learn about the JSON schema | [SCHEMA_GUIDE.md](SCHEMA_GUIDE.md) or [../SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md) |
-| Add a new LLM provider | [IMPLEMENTATION_GUIDE.md#adding-llm-providers](IMPLEMENTATION_GUIDE.md#adding-llm-providers) |
-| Understand comparison metrics | [METRICS_EXPLAINED.md](METRICS_EXPLAINED.md) |
-| Set up for research | [RESEARCH_GUIDE.md#getting-started](RESEARCH_GUIDE.md#getting-started) |
-| Migrate from v1 | [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) |
-| Troubleshoot an issue | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| Deploy to production | [DEPLOYMENT.md](DEPLOYMENT.md) |
-
----
-
-## 📚 External Documentation
-
-### Root-Level Docs
-- **[SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md)** - Complete schema reference with all fields
-- **[example.jsonc](../example.jsonc)** - Fully annotated example evaluation
-- **[README.md](../README.md)** - Project overview and quick start
-
-### Legacy Docs (v1)
-- **[DATABASE.md](DATABASE.md)** - Current database implementation (being updated)
-- **[JSON_OUTPUT.md](JSON_OUTPUT.md)** - Old JSON structure (deprecated)
-- **[later_CLI_PROVIDER_PLAN.md](later_CLI_PROVIDER_PLAN.md)** - Future plans
+| Install and run my first evaluation | ✅ [GETTING_STARTED.md](GETTING_STARTED.md) |
+| Learn about the JSON schema | ✅ [SCHEMA_GUIDE.md](SCHEMA_GUIDE.md) or [../SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md) |
+| See a complete example | ✅ [../example.jsonc](../example.jsonc) |
+| Migrate from v1 | ✅ [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) |
+| Understand the system architecture | 📝 [ARCHITECTURE.md](ARCHITECTURE.md) (v1, needs update) |
+| Understand comparison metrics | ✅ [../SCHEMA_DOCUMENTATION.md#comparison-metrics-reference](../SCHEMA_DOCUMENTATION.md#comparison-metrics-reference) |
+| Add a new LLM provider | 📋 Planned: `IMPLEMENTATION_GUIDE.md` |
+| Set up for research | 📋 Planned: `RESEARCH_GUIDE.md` |
+| Troubleshoot an issue | 📋 Planned: `TROUBLESHOOTING.md` |
 
 ---
 
@@ -236,33 +222,31 @@ See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
 
 ### Path 1: Quick Start (30 minutes)
 ```
-1. [GETTING_STARTED.md]
+1. Read [GETTING_STARTED.md] ✅
    ↓
 2. Run your first evaluation
    ↓
-3. Explore the output JSON
+3. Explore output with [SCHEMA_GUIDE.md] ✅
 ```
 
-### Path 2: Developer Onboarding (2 hours)
+### Path 2: Understanding the Schema (1 hour)
 ```
-1. [GETTING_STARTED.md]
+1. Quick reference: [SCHEMA_GUIDE.md] ✅
    ↓
-2. [ARCHITECTURE.md] - Understand system design
+2. Complete details: [../SCHEMA_DOCUMENTATION.md] ✅
    ↓
-3. [SCHEMA_GUIDE.md] - Master the data model
-   ↓
-4. [IMPLEMENTATION_GUIDE.md] - Start building
+3. See example: [../example.jsonc] ✅
 ```
 
-### Path 3: Research User (1 hour)
+### Path 3: Migrating from v1 (1-2 hours)
 ```
-1. [GETTING_STARTED.md]
+1. Read [MIGRATION_GUIDE.md] ✅
    ↓
-2. [RESEARCH_GUIDE.md] - Research workflows
+2. Backup your data
    ↓
-3. [METRICS_EXPLAINED.md] - Understand statistics
+3. Follow migration steps
    ↓
-4. Run analyses, export data
+4. Test with [GETTING_STARTED.md] ✅
 ```
 
 ---
@@ -279,8 +263,6 @@ See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details.
 | **Provider** | An LLM service (OpenAI, eduai, OpenRouter) |
 | **Rubric Category** | One aspect of grading (e.g., "syntax", "logic") |
 
-For complete definitions, see [CONCEPTS.md](CONCEPTS.md).
-
 ---
 
 ## 🤝 Contributing to Docs
@@ -292,23 +274,23 @@ When updating documentation:
 ✅ **Provide examples** - Show actual code/JSON
 ✅ **Link between pages** - Help readers navigate
 ✅ **Update this index** - When you add new docs
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full guide.
+✅ **Mark status** - Use ✅ (exists), 📝 (needs update), 📋 (planned)
 
 ---
 
 ## 🆘 Getting Help
 
 ### Common Issues
-- Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) first
-- Review [GETTING_STARTED.md](GETTING_STARTED.md) if setup fails
-- See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) if upgrading from v1
+1. **Setup problems** → Read [GETTING_STARTED.md](GETTING_STARTED.md)
+2. **Schema questions** → Check [SCHEMA_GUIDE.md](SCHEMA_GUIDE.md) or [../SCHEMA_DOCUMENTATION.md](../SCHEMA_DOCUMENTATION.md)
+3. **Migration issues** → Follow [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)
+4. **Need an example** → See [../example.jsonc](../example.jsonc)
 
 ### Still Stuck?
-1. Check if your question is answered in the relevant guide
-2. Look at [../example.jsonc](../example.jsonc) for a working example
-3. Review the root [README.md](../README.md)
-4. Report an issue with details about what you tried
+1. Re-read the relevant guide carefully
+2. Check the [example.jsonc](../example.jsonc) for a working example
+3. Review the main [README.md](../README.md) for project overview
+4. Search the documentation for keywords
 
 ---
 
