@@ -128,6 +128,24 @@ class Misconception(BaseModel):
     )
 
 
+class LLMEvaluationResponse(BaseModel):
+    """
+    Response from LLM containing only the evaluation content (no metadata).
+
+    This is what the LLM fills out. Metadata (model_name, provider, run_id, config)
+    is added by the developer to create the full ModelEvaluation.
+    """
+
+    scores: Scores = Field(..., description="Aggregate score for this model")
+    category_scores: list[CategoryScore] = Field(
+        ..., description="Per-category rubric scores with justification"
+    )
+    feedback: Feedback = Field(..., description="Human-readable feedback bundle for this model")
+    misconceptions: list[Misconception] = Field(
+        ..., description="Misconceptions for this submission according to this model"
+    )
+
+
 class ModelEvaluation(BaseModel):
     """
     Complete evaluation result from a single grading model.
@@ -137,9 +155,8 @@ class ModelEvaluation(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model_name: str = Field(..., description="Human-readable model name/alias")
+    model_name: str = Field(..., description="Human-readable model name with version (e.g., gpt-5-nano-2025-08-07)")
     provider: str = Field(..., description="Who provides this model (for analysis across vendors)")
-    model_version: str = Field(..., description="Specific version/snapshot used")
     run_id: str = Field(..., description="ID of this model invocation for traceability in logs")
     config: Config = Field(..., description="Configuration settings for this model run")
     scores: Scores = Field(..., description="Aggregate score for this model")

@@ -13,6 +13,8 @@ Main Components:
 - Comparison: Multi-model comparison and ensemble analysis
 """
 
+__version__ = "1.0.0"
+
 # Root evaluation document
 # Comparison models
 from .comparison import (
@@ -58,6 +60,7 @@ from .models import (
     Config,
     Evidence,
     Feedback,
+    LLMEvaluationResponse,
     Misconception,
     ModelEvaluation,
     Scores,
@@ -82,6 +85,7 @@ __all__ = [
     "RubricCategory",
     # Model evaluation
     "ModelEvaluation",
+    "LLMEvaluationResponse",
     "Config",
     "Scores",
     "CategoryScore",
@@ -126,5 +130,3 @@ __all__ = [
     "ComparisonMetadata",
     "ThresholdsConfig",
 ]
-
-__version__ = "1.0.0"
