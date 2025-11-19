@@ -1,1 +1,0 @@
-"""Grading paradigm mode implementations."""
