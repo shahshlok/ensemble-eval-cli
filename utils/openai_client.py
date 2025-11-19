@@ -2,13 +2,12 @@
 
 import json
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from pydantic_models import Config, LLMEvaluationResponse, ModelEvaluation
 from prompts import direct_prompt
+from pydantic_models import Config, LLMEvaluationResponse, ModelEvaluation
 
 load_dotenv()
 

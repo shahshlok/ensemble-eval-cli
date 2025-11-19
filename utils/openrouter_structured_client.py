@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, Dict, List, Type, TypeVar
+from typing import TypeVar
 
 import requests
 from dotenv import load_dotenv
@@ -22,27 +22,27 @@ def resolve_refs(schema, defs=None):
     Many models struggle with $defs/definitions in the schema.
     """
     if defs is None:
-        defs = schema.get('$defs', {})
-    
+        defs = schema.get("$defs", {})
+
     if isinstance(schema, dict):
-        if '$ref' in schema:
-            ref = schema['$ref']
+        if "$ref" in schema:
+            ref = schema["$ref"]
             # ref is usually like '#/$defs/Scores'
-            name = ref.split('/')[-1]
+            name = ref.split("/")[-1]
             if name in defs:
                 return resolve_refs(defs[name], defs)
-        
-        return {k: resolve_refs(v, defs) for k, v in schema.items() if k != '$defs'}
-    
+
+        return {k: resolve_refs(v, defs) for k, v in schema.items() if k != "$defs"}
+
     if isinstance(schema, list):
         return [resolve_refs(x, defs) for x in schema]
-    
+
     return schema
 
 
 def get_gemini_structured_response(
-    messages: List[Dict[str, str]],
-    response_model: Type[T],
+    messages: list[dict[str, str]],
+    response_model: type[T],
 ) -> T:
     """
     Get a structured response from OpenRouter (Gemini) matching the Pydantic model.
@@ -74,8 +74,8 @@ def get_gemini_structured_response(
         headers={
             "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/shahshlok/ensemble-eval-cli", 
-            "X-Title": "Ensemble Eval CLI", 
+            "HTTP-Referer": "https://github.com/shahshlok/ensemble-eval-cli",
+            "X-Title": "Ensemble Eval CLI",
         },
         json={
             "model": MODEL_NAME,
@@ -93,15 +93,15 @@ def get_gemini_structured_response(
         raise Exception(f"OpenRouter API Error ({response.status_code}): {response.text}")
 
     data = response.json()
-    
+
     try:
-        tool_calls = data['choices'][0]['message']['tool_calls']
+        tool_calls = data["choices"][0]["message"]["tool_calls"]
         if not tool_calls:
-             raise Exception("No tool calls found in response")
-        
-        arguments_str = tool_calls[0]['function']['arguments']
+            raise Exception("No tool calls found in response")
+
+        arguments_str = tool_calls[0]["function"]["arguments"]
         llm_response_data = json.loads(arguments_str)
-        
+
         # Validate with Pydantic
         return response_model(**llm_response_data)
 

@@ -3,13 +3,14 @@
 In this paradigm, the model grades the student code directly against the rubric
 without any intermediate steps.
 """
+
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 
-def build_prompt(question: str, rubric_json: Dict[str, Any], student_code: str) -> str:
+def build_prompt(question: str, rubric_json: dict[str, Any], student_code: str) -> str:
     """Build a direct grading prompt.
 
     The model is instructed to evaluate the student's code strictly according to

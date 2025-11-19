@@ -12,6 +12,7 @@ from .submission import Submission
 
 # TODO:Gotta put the comparison pydantic model here too but later
 
+
 class EvaluationDocument(BaseModel):
     """
     Complete evaluation document.
