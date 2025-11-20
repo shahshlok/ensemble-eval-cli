@@ -86,7 +86,7 @@ async def grade_student_with_models(
     results = await asyncio.gather(*tasks)
 
     # Map results back to model names
-    return {model: result for model, result in zip(MODELS, results)}
+    return dict(zip(MODELS, results, strict=True))
 
 
 async def process_student_wrapper(
