@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from pydantic_models import (
     Config,
@@ -16,15 +16,20 @@ from pydantic_models import (
 )
 from utils.openrouter_sdk import get_structured_response
 
+
 def load_question(file_path: str) -> str:
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         return f.read()
 
-def load_rubric(file_path: str) -> Dict[str, Any]:
-    with open(file_path, "r") as f:
+
+def load_rubric(file_path: str) -> dict[str, Any]:
+    with open(file_path) as f:
         return json.load(f)
 
-def load_student_submission(student_id: str, submission_dir: str = "student_submissions") -> tuple[str, str]:
+
+def load_student_submission(
+    student_id: str, submission_dir: str = "student_submissions"
+) -> tuple[str, str]:
     """
     Loads the student submission.
     Returns: (code_content, filename)
@@ -32,16 +37,17 @@ def load_student_submission(student_id: str, submission_dir: str = "student_subm
     student_dir = os.path.join(submission_dir, student_id)
     if not os.path.exists(student_dir):
         raise FileNotFoundError(f"Student directory not found: {student_dir}")
-    
+
     # Find the first .java file (assuming Java for now as per grade_sergio.py)
     for file in os.listdir(student_dir):
         if file.endswith(".java"):
-            with open(os.path.join(student_dir, file), "r") as f:
+            with open(os.path.join(student_dir, file)) as f:
                 return f.read(), file
-    
+
     raise FileNotFoundError(f"No .java file found for student {student_id}")
 
-def construct_prompt(question_text: str, rubric_data: Dict[str, Any], student_code: str) -> str:
+
+def construct_prompt(question_text: str, rubric_data: dict[str, Any], student_code: str) -> str:
     rubric_str = json.dumps(rubric_data)
     prompt = f"""
 You are an expert grader for a Computer Science assignment.
@@ -66,10 +72,8 @@ Provide a structured output containing:
 """
     return prompt
 
-async def grade_with_model(
-    model_name: str,
-    messages: List[Dict[str, str]]
-) -> ModelEvaluation:
+
+async def grade_with_model(model_name: str, messages: list[dict[str, str]]) -> ModelEvaluation:
     """
     Calls the LLM to grade the submission.
     """
@@ -82,9 +86,7 @@ async def grade_with_model(
             model_name=model_name,
             provider="openrouter",
             run_id=f"run_{uuid.uuid4().hex[:8]}",
-            config=Config(
-                system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"
-            ),
+            config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
             scores=llm_response.scores,
             category_scores=llm_response.category_scores,
             feedback=llm_response.feedback,
@@ -93,21 +95,21 @@ async def grade_with_model(
     except Exception as e:
         raise e
 
+
 def create_evaluation_document(
     student_id: str,
     student_name: str,
     question_text: str,
-    rubric_data: Dict[str, Any],
+    rubric_data: dict[str, Any],
     filename: str,
-    model_evals: Dict[str, ModelEvaluation]
+    model_evals: dict[str, ModelEvaluation],
 ) -> EvaluationDocument:
-    
     # Context
     context = Context(
         course_id="CS101",
         course_name="Intro to CS",
         assignment_id=1,
-        assignment_title="Cuboid", # Hardcoded as per grade_sergio.py
+        assignment_title="Cuboid",  # Hardcoded as per grade_sergio.py
         question_source_path="question_cuboid.md",
         question_id="q1",
         question_title="Cuboid Class",

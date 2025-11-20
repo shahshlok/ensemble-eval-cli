@@ -1,5 +1,6 @@
 import os
 from typing import TypeVar
+
 import instructor
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -19,10 +20,11 @@ client = instructor.from_openai(
     mode=instructor.Mode.JSON,
 )
 
+
 # Add automatic retries for rate limits (429) and server errors (5xx)
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 0.4)
+    wait=wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 0.4),
 )
 async def get_structured_response(
     messages: list[dict[str, str]],
