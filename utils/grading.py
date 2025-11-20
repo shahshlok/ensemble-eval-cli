@@ -66,18 +66,18 @@ Provide a structured output containing:
 """
     return prompt
 
-def grade_with_model(
-    model_name: str, 
+async def grade_with_model(
+    model_name: str,
     messages: List[Dict[str, str]]
 ) -> ModelEvaluation:
     """
     Calls the LLM to grade the submission.
     """
     try:
-        llm_response = get_structured_response(
+        llm_response = await get_structured_response(
             messages, LLMEvaluationResponse, model=model_name
         )
-        
+
         return ModelEvaluation(
             model_name=model_name,
             provider="openrouter",

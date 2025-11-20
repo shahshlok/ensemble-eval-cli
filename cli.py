@@ -1,15 +1,26 @@
 import os
+import asyncio
 import typer
+from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
+
+# Rich Imports
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.progress import (
+    Progress, 
+    SpinnerColumn, 
+    TextColumn, 
+    BarColumn, 
+    TimeElapsedColumn, 
+    TaskID
+)
 from rich.table import Table
 from rich import box
 from rich.text import Text
 from rich.align import Align
-from typing import List, Dict, Any
-from dotenv import load_dotenv
 
+# Local Imports
 from utils.grading import (
     load_question,
     load_rubric,
@@ -24,8 +35,13 @@ load_dotenv()
 app = typer.Typer()
 console = Console()
 
+# --- Configuration ---
+# Reduce this if you hit rate limits (429 errors), increase if your tier allows.
+MAX_CONCURRENT_STUDENTS = 5 
 MODELS = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
 BATCH_LIMIT = 10
+
+# --- Helper Functions ---
 
 def get_student_list(submission_dir: str = "student_submissions") -> List[str]:
     if not os.path.exists(submission_dir):
@@ -34,7 +50,7 @@ def get_student_list(submission_dir: str = "student_submissions") -> List[str]:
 
 def create_header():
     title = Text("ENSEMBLE EVALUATION BENCHMARK", style="bold white on blue", justify="center")
-    subtitle = Text("Batch Processing Protocol v2.0", style="italic cyan", justify="center")
+    subtitle = Text("Async Batch Protocol v3.0 (Parallel)", style="italic cyan", justify="center")
     
     content = Align.center(
         Text.assemble(title, "\n", subtitle),
@@ -49,32 +65,94 @@ def create_header():
         title_align="right",
     )
 
-@app.command(name="bench")
-def main():
-    # 1. Header
-    console.print(create_header())
-    console.print()
+async def grade_student_with_models(student_code: str, question_text: str, rubric_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Grades a single student against ALL models in parallel.
+    """
+    prompt = construct_prompt(question_text, rubric_data, student_code)
+    messages = [{"role": "user", "content": prompt}]
 
-    # 2. Discovery & Batching
-    all_students = get_student_list()
-    if not all_students:
-        console.print(Panel("[red]No student submissions found in 'student_submissions/'[/red]", title="Error", border_style="red"))
-        return
+    async def grade_with_error_handling(model: str):
+        try:
+            # grading.py's grade_with_model is already async
+            return await grade_with_model(model, messages)
+        except Exception:
+            # Return None on error, will be filtered out later
+            return None
 
-    students_to_grade = all_students[:BATCH_LIMIT]
-    console.print(f"[bold]Found {len(all_students)} submissions. Processing top {len(students_to_grade)}...[/bold]")
-    console.print()
+    # Run model calls in parallel (Inner Loop Parallelism)
+    tasks = [grade_with_error_handling(model) for model in MODELS]
+    results = await asyncio.gather(*tasks)
 
-    # 3. Setup Resources
-    try:
-        with console.status("[bold yellow]Loading Assignment Resources...[/bold yellow]", spinner="dots"):
-            question_text = load_question("question_cuboid.md")
-            rubric_data = load_rubric("rubric_cuboid.json")
-    except Exception as e:
-        console.print(f"[red]Error loading resources: {e}[/red]")
-        return
+    # Map results back to model names
+    return {model: result for model, result in zip(MODELS, results)}
 
-    # 4. Batch Execution
+async def process_student_wrapper(
+    sem: asyncio.Semaphore,
+    student_id: str,
+    question_text: str,
+    rubric_data: Dict[str, Any],
+    progress: Progress,
+    task_id: TaskID
+) -> Optional[Dict[str, Any]]:
+    """
+    Worker function that processes one student within the semaphore limit.
+    """
+    student_name = student_id.replace("_", " ")
+    
+    # Wait here if we have reached MAX_CONCURRENT_STUDENTS
+    async with sem:
+        progress.update(task_id, description=f"Grading: [cyan]{student_id}[/cyan]")
+        
+        try:
+            # 1. Load submission (Fast I/O)
+            student_code, filename = load_student_submission(student_id)
+
+            # 2. Grade (Slow Network Call)
+            model_evals = await grade_student_with_models(
+                student_code, question_text, rubric_data
+            )
+
+            # 3. Save Results (Fast I/O)
+            valid_evals = {k: v for k, v in model_evals.items() if v is not None}
+            
+            if valid_evals:
+                eval_doc = create_evaluation_document(
+                    student_id,
+                    student_name,
+                    question_text,
+                    rubric_data,
+                    filename,
+                    valid_evals
+                )
+                
+                output_dir = "student_evals"
+                os.makedirs(output_dir, exist_ok=True)
+                output_file = f"{output_dir}/{student_id}_eval.json"
+                with open(output_file, "w") as f:
+                    f.write(eval_doc.model_dump_json(indent=2))
+                
+                progress.advance(task_id)
+                return {
+                    "student": student_id,
+                    "evals": valid_evals
+                }
+            else:
+                # Both models failed
+                progress.console.print(f"[red]All models failed for {student_id}[/red]")
+                progress.advance(task_id)
+                return None
+
+        except Exception as e:
+            progress.console.print(f"[red]Error processing {student_id}: {e}[/red]")
+            progress.advance(task_id) # Advance anyway to not hang the bar
+            return None
+
+async def batch_grade_students(students: List[str], question_text: str, rubric_data: Dict[str, Any]) -> List[Dict]:
+    """
+    Orchestrates the parallel grading of multiple students.
+    """
+    sem = asyncio.Semaphore(MAX_CONCURRENT_STUDENTS)
     results = []
 
     with Progress(
@@ -87,56 +165,57 @@ def main():
         expand=True
     ) as progress:
         
-        overall_task = progress.add_task("Batch Progress", total=len(students_to_grade))
+        overall_task = progress.add_task("Batch Progress", total=len(students))
         
-        for student_id in students_to_grade:
-            student_name = student_id.replace("_", " ")
-            progress.update(overall_task, description=f"Grading: [cyan]{student_id}[/cyan]")
-            
-            try:
-                # Load submission
-                student_code, filename = load_student_submission(student_id)
-                prompt = construct_prompt(question_text, rubric_data, student_code)
-                messages = [{"role": "user", "content": prompt}]
-                
-                model_evals = {}
-                
-                # Grade with each model
-                for model in MODELS:
-                    try:
-                        eval_result = grade_with_model(model, messages)
-                        model_evals[model] = eval_result
-                    except Exception as e:
-                        # Log error but continue
-                        model_evals[model] = None
-                
-                # Save if we have at least one result
-                valid_evals = {k: v for k, v in model_evals.items() if v is not None}
-                if valid_evals:
-                    eval_doc = create_evaluation_document(
-                        student_id,
-                        student_name,
-                        question_text,
-                        rubric_data,
-                        filename,
-                        valid_evals
-                    )
-                    
-                    output_dir = "student_evals"
-                    os.makedirs(output_dir, exist_ok=True)
-                    output_file = f"{output_dir}/{student_id}_eval.json"
-                    with open(output_file, "w") as f:
-                        f.write(eval_doc.model_dump_json(indent=2))
-                    
-                    results.append({
-                        "student": student_id,
-                        "evals": valid_evals
-                    })
-            
-            except Exception as e:
-                console.print(f"[red]Failed to process {student_id}: {e}[/red]")
-            
-            progress.advance(overall_task)
+        # Create a list of pending coroutines
+        tasks = []
+        for student_id in students:
+            tasks.append(
+                process_student_wrapper(
+                    sem, student_id, question_text, rubric_data, progress, overall_task
+                )
+            )
+        
+        # Fire them all!
+        # returns a list of results in the same order as tasks
+        raw_results = await asyncio.gather(*tasks)
+        
+        # Filter out Nones (failed students)
+        results = [r for r in raw_results if r is not None]
+
+    return results
+
+# --- Main Command ---
+
+@app.command(name="bench")
+def main():
+    # 1. Header
+    console.print(create_header())
+    console.print()
+
+    # 2. Discovery
+    all_students = get_student_list()
+    if not all_students:
+        console.print(Panel("[red]No student submissions found in 'student_submissions/'[/red]", title="Error", border_style="red"))
+        return
+
+    students_to_grade = all_students[:BATCH_LIMIT]
+    console.print(f"[bold]Found {len(all_students)} submissions. Processing top {len(students_to_grade)}...[/bold]")
+    console.print(f"[dim]Concurrency Limit: {MAX_CONCURRENT_STUDENTS} students at a time[/dim]")
+    console.print()
+
+    # 3. Setup Resources
+    try:
+        with console.status("[bold yellow]Loading Assignment Resources...[/bold yellow]", spinner="dots"):
+            question_text = load_question("question_cuboid.md")
+            rubric_data = load_rubric("rubric_cuboid.json")
+    except Exception as e:
+        console.print(f"[red]Error loading resources: {e}[/red]")
+        return
+
+    # 4. Async Batch Execution
+    # This replaces the old manual for-loop
+    results = asyncio.run(batch_grade_students(students_to_grade, question_text, rubric_data))
 
     # 5. Comparative Table
     console.print()
@@ -164,7 +243,12 @@ def main():
         gemini_score = gemini_eval.scores.total_points_awarded if gemini_eval else 0
         kimi_score = kimi_eval.scores.total_points_awarded if kimi_eval else 0
         
-        avg_score = (gemini_score + kimi_score) / 2
+        # Handle missing models for average calc
+        valid_scores = []
+        if gemini_eval: valid_scores.append(gemini_score)
+        if kimi_eval: valid_scores.append(kimi_score)
+        
+        avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
         diff = abs(gemini_score - kimi_score)
         
         # Calculate average confidence
@@ -180,12 +264,18 @@ def main():
         flag = "✅" if diff <= 10 else "🚩"
         
         # Comment logic
-        if diff <= 5:
-            comment = "Models agree within tolerance"
-        elif gemini_score < kimi_score:
-            comment = f"Gemini stricter by {diff:.1f} pts"
-        else:
-            comment = f"Kimi stricter by {diff:.1f} pts"
+        comment = "-"
+        if gemini_eval and kimi_eval:
+            if diff <= 5:
+                comment = "Models agree"
+            elif gemini_score < kimi_score:
+                comment = f"Gemini stricter (-{diff:.1f})"
+            else:
+                comment = f"Kimi stricter (-{diff:.1f})"
+        elif not gemini_eval:
+            comment = "Gemini Failed"
+        elif not kimi_eval:
+            comment = "Kimi Failed"
 
         table.add_row(
             student,
@@ -200,7 +290,7 @@ def main():
 
     console.print(table)
     console.print()
-    console.print(f"[dim]Processed {len(results)} students. Detailed logs saved to student_evals/[/dim]")
+    console.print(f"[dim]Processed {len(results)} students successfully. Logs in student_evals/[/dim]")
 
 if __name__ == "__main__":
     app()
