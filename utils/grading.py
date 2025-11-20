@@ -14,6 +14,8 @@ from pydantic_models import (
     StudentFile,
     Submission,
 )
+from pydantic_models.comparison.models import Comparison
+from utils.comparison_generator import generate_score_summary
 from utils.openrouter_sdk import get_structured_response
 
 
@@ -153,4 +155,5 @@ def create_evaluation_document(
         submission=submission,
         rubric=rubric,
         models=model_evals,
+        comparison=Comparison(score_summary=generate_score_summary(model_evals)),
     )
