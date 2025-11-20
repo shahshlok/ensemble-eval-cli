@@ -31,11 +31,11 @@ class Comparison(BaseModel):
     pairwise_differences: list[PairwiseComparison] = Field(
         ..., description="Detailed model-vs-model differences (scales to N models)"
     )
-    category_agreement: list[CategoryAgreement] | None = Field(
-        default=None, description="Per-rubric-category statistics and agreement levels"
+    category_agreement: list[CategoryAgreement] = Field(
+        ..., description="Per-rubric-category statistics and agreement levels"
     )
-    category_insights: CategoryInsights | None = Field(
-        default=None, description="High-level insights about category-level agreement and confidence"
+    category_insights: CategoryInsights = Field(
+        ..., description="High-level insights about category-level agreement and confidence"
     )
     misconception_summary: MisconceptionSummary | None = Field(
         default=None, description="Compare misconception detection across models"

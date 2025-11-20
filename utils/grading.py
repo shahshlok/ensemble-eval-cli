@@ -16,6 +16,8 @@ from pydantic_models import (
 )
 from pydantic_models.comparison.models import Comparison
 from utils.comparison_generator import (
+    generate_category_agreement,
+    generate_category_insights,
     generate_pairwise_differences,
     generate_score_summary,
 )
@@ -161,5 +163,7 @@ def create_evaluation_document(
         comparison=Comparison(
             score_summary=generate_score_summary(model_evals),
             pairwise_differences=generate_pairwise_differences(model_evals),
+            category_agreement=(cat_agreement := generate_category_agreement(model_evals)),
+            category_insights=generate_category_insights(cat_agreement),
         ),
     )

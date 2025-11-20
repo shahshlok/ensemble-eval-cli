@@ -3,6 +3,8 @@ import json
 import os
 from pydantic_models.evaluation import EvaluationDocument
 from utils.comparison_generator import (
+    generate_category_agreement,
+    generate_category_insights,
     generate_pairwise_differences,
     generate_score_summary,
 )
@@ -87,6 +89,50 @@ class TestComparisonGenerator(unittest.TestCase):
             # If we have categories, check one
             cat_diff = pair.category_differences[0]
             self.assertIsInstance(cat_diff.difference, int)
+
+    def test_generate_category_agreement_and_insights_real_data(self):
+        file_path = "student_evals/Diaz_Sergio_100029_eval.json"
+        if not os.path.exists(file_path):
+            self.skipTest(f"File {file_path} not found")
+            
+        with open(file_path, "r") as f:
+            data = json.load(f)
+            
+        # Extract models directly
+        models_data = data.get("models", {})
+        from pydantic_models.models import ModelEvaluation
+        models = {k: ModelEvaluation(**v) for k, v in models_data.items()}
+
+        # 1. Agreement
+        agreement = generate_category_agreement(models)
+        
+        print("\n=== Category Agreement ===")
+        # Print first one for brevity
+        if agreement:
+            print(json.dumps(agreement[0].model_dump(), indent=2))
+        print("==========================\n")
+
+        self.assertTrue(len(agreement) > 0)
+        first_cat = agreement[0]
+        self.assertIn("google/gemini-2.5-flash-lite", first_cat.all_model_scores)
+        self.assertIn("moonshotai/kimi-k2-0905", first_cat.all_model_scores)
+        
+        # 2. Insights
+        insights = generate_category_insights(agreement)
+        
+        print("\n=== Category Insights ===")
+        print(json.dumps(insights.model_dump(), indent=2))
+        print("=========================\n")
+        
+        self.assertIsNotNone(insights.most_controversial)
+        self.assertIsNotNone(insights.most_agreed)
+        self.assertIsNotNone(insights.lowest_confidence)
+        
+        # Verify logic: controversial should have >= CV than agreed
+        self.assertGreaterEqual(
+            insights.most_controversial.cv, 
+            insights.most_agreed.cv
+        )
 
 if __name__ == '__main__':
     unittest.main()
