@@ -1,3 +1,32 @@
+"""
+Example Evaluation Workflow: Sergio's Cuboid Submission
+
+This script demonstrates the complete end-to-end evaluation pipeline for a single student
+using multiple LLM models. It serves as a reference implementation for how to use the
+Ensemble Model Evaluation framework.
+
+Workflow:
+1. Load assignment materials (question, rubric)
+2. Load student submission (code files)
+3. Construct evaluation prompt
+4. Query multiple LLM models for structured evaluations
+5. Assemble complete EvaluationDocument with all components
+6. Save to JSON for analysis
+
+Models Tested:
+- Google Gemini 2.5 Flash Lite (via OpenRouter)
+- Moonshot AI Kimi K2 0905 (via OpenRouter)
+
+Output:
+- student_evals/sergio_eval.json
+
+Usage:
+    $ uv run python grade_sergio.py
+
+Environment Variables Required:
+    OPENROUTER_API_KEY: Your OpenRouter API key
+"""
+
 import json
 import os
 import uuid
