@@ -3,13 +3,14 @@
 In this paradigm, the model first generates an ideal reference solution,
 then compares the student's code against that reference.
 """
+
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 
-def build_prompt(question: str, rubric_json: Dict[str, Any], student_code: str) -> str:
+def build_prompt(question: str, rubric_json: dict[str, Any], student_code: str) -> str:
     """Build a reverse grading prompt.
 
     The model is instructed to:
