@@ -62,9 +62,6 @@ Provide a structured output containing:
     messages = [{"role": "user", "content": prompt}]
 
     # 3. Get LLM Response
-    print("Calling OpenRouter (Gemini)...")
-    llm_response = get_structured_response(messages, LLMEvaluationResponse)
-    print("Received response from LLM.")
 
     # 4. Construct EvaluationDocument components
 
@@ -110,16 +107,32 @@ Provide a structured output containing:
     )
 
     # ModelEvaluation
-    model_eval = ModelEvaluation(
-        model_name="google/gemini-2.5-flash-lite",
-        provider="openrouter",
-        run_id=f"run_{uuid.uuid4().hex[:8]}",
-        config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
-        scores=llm_response.scores,
-        category_scores=llm_response.category_scores,
-        feedback=llm_response.feedback,
-        misconceptions=llm_response.misconceptions,
-    )
+    models_to_test = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
+    model_evals = {}
+
+    for model_name in models_to_test:
+        print(f"Calling OpenRouter ({model_name})...")
+        try:
+            llm_response = get_structured_response(messages, LLMEvaluationResponse, model=model_name)
+            print(f"Received response from {model_name}.")
+
+            model_eval = ModelEvaluation(
+                model_name=model_name,
+                provider="openrouter",
+                run_id=f"run_{uuid.uuid4().hex[:8]}",
+                config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
+                scores=llm_response.scores,
+                category_scores=llm_response.category_scores,
+                feedback=llm_response.feedback,
+                misconceptions=llm_response.misconceptions,
+            )
+            # Use a simplified key for the dictionary (e.g., "gemini-2.5-flash-lite")
+            # or just use the full model name if preferred. Let's use the full name for clarity
+            # or split by slash to get the model part.
+            key_name = model_name.split("/")[-1] if "/" in model_name else model_name
+            model_evals[key_name] = model_eval
+        except Exception as e:
+            print(f"Failed to get response from {model_name}: {e}")
 
     # 5. Assemble EvaluationDocument
     eval_doc = EvaluationDocument(
@@ -130,7 +143,7 @@ Provide a structured output containing:
         context=context,
         submission=submission,
         rubric=rubric,
-        models={"gemini-2.5-flash-lite": model_eval},
+        models=model_evals,
     )
 
     # 6. Save to file
