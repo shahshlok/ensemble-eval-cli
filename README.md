@@ -88,7 +88,7 @@ Minimal setup to execute the provided example workflow:
 git clone https://github.com/shahshlok/ensemble-eval-cli
 cd ensemble-eval-cli
 
-# 2. Install dependencies
+# 2. Install dependencies (using uv)
 uv sync
 
 # 3. Create .env file with your API keys
@@ -96,11 +96,18 @@ uv sync
 echo "OPENAI_API_KEY=sk-..." > .env
 echo "OPENROUTER_API_KEY=sk-or-..." >> .env
 
-# 4. Run the example script
-uv run python grade_sergio.py
+# 4a. Run the batch CLI over all students
+uv run python cli.py bench
+
+# 4b. (Optional) Run the single‑student sandbox experiment
+# Long form:
+uv run python sandbox/single_submission.py
+# Or, using the CLI alias:
+uv run experiment
 ```
 
-**Results saved to:** `student_evals/sergio_eval.json`
+**Batch results saved to:** `student_evals/{student_id}_eval.json`  
+**Sandbox results saved to:** `sandbox/evals/{student_id}_eval.json`
 
 For a more detailed description of the pipeline and configuration options, see `docs/00-QUICK-START.md` and `docs/03-USAGE-GUIDE.md`.
 
@@ -209,7 +216,7 @@ ensemble-eval-cli/
 ├── student_evals/               # Output: evaluation results (one JSON per eval)
 │
 ├── cli.py                       # Async batch CLI (Typer + Rich)
-├── grade_sergio.py              # Single-student example workflow
+├── sandbox/single_submission.py # Single-student sandbox workflow
 ├── question_cuboid.md           # Example assignment
 ├── rubric_cuboid.json           # Example grading rubric
 ├── pyproject.toml               # Project configuration
@@ -299,7 +306,7 @@ Each file contains:
 - [x] Document all fields and interpretations
 - [x] Implement complete Pydantic model hierarchy
 - [x] Integrate OpenAI and OpenRouter SDKs
-- [x] Create example evaluation workflow (`grade_sergio.py`)
+- [x] Create example evaluation workflows (batch CLI + sandbox single-student script)
 
 ### Phase 2: Comparison Engine **IN PROGRESS**
 - [ ] Implement comparison computation logic
