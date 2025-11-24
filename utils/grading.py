@@ -14,14 +14,62 @@ from pydantic_models import (
     StudentFile,
     Submission,
 )
-from pydantic_models.comparison.models import Comparison
-from utils.comparison_generator import (
-    generate_category_agreement,
-    generate_category_insights,
-    generate_pairwise_differences,
-    generate_score_summary,
-)
 from utils.openrouter_sdk import get_structured_response
+
+
+def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
+    """
+    Parses a markdown table rubric into a dictionary.
+    Expected columns: Tasks, Marks Assigned, Bloom's Level, Why?
+    """
+    lines = md_content.splitlines()
+    categories = []
+    total_points = 0.0
+
+    # Skip header and separator lines
+    # Find the start of the table
+    start_index = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith("|") and "Tasks" in line:
+            start_index = i + 2  # Skip header and separator
+            break
+
+    for line in lines[start_index:]:
+        if not line.strip().startswith("|"):
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        # parts[0] is empty string before first |
+        # parts[1] is Task
+        # parts[2] is Marks
+        # parts[3] is Bloom's Level
+        # parts[4] is Why?
+
+        if len(parts) < 5:
+            continue
+
+        task = parts[1]
+        marks_str = parts[2].replace("+", "").strip()
+        try:
+            points = float(marks_str)
+        except ValueError:
+            continue  # Skip if marks not parseable
+
+        bloom_level_full = parts[3]
+        # Extract "Understand" from "Level 2: Understand"
+        if ":" in bloom_level_full:
+            bloom_level = bloom_level_full.split(":", 1)[1].strip()
+        else:
+            bloom_level = bloom_level_full
+
+        description = parts[4] if len(parts) > 4 else ""
+
+        categories.append(
+            {"task": task, "points": points, "bloom_level": bloom_level, "description": description}
+        )
+        total_points += points
+
+    return {"totalPoints": total_points, "categories": categories}
 
 
 def load_question(file_path: str) -> str:
@@ -30,6 +78,9 @@ def load_question(file_path: str) -> str:
 
 
 def load_rubric(file_path: str) -> dict[str, Any]:
+    if file_path.endswith(".md"):
+        with open(file_path) as f:
+            return parse_markdown_rubric(f.read())
     with open(file_path) as f:
         return json.load(f)
 
@@ -55,7 +106,7 @@ def load_student_submission(
 
 
 def construct_prompt(question_text: str, rubric_data: dict[str, Any], student_code: str) -> str:
-    rubric_str = json.dumps(rubric_data)
+    rubric_str = json.dumps(rubric_data, indent=2)
     prompt = f"""
 You are an expert grader for a Computer Science assignment.
 
@@ -74,7 +125,11 @@ Evaluate the student's submission based on the provided rubric.
 Provide a structured output containing:
 1. Scores for each category in the rubric.
 2. Specific feedback for each category.
-3. Identification of any misconceptions.
+3. Identification of any misconceptions. For each misconception:
+   - Include the Bloom's taxonomy level (from the rubric category where the misconception appears)
+   - Include the task name from the rubric category where the misconception appears
+   - Consider that misconceptions at higher Bloom's levels (e.g., Analyze, Evaluate) may indicate deeper conceptual gaps
+   - If a misconception spans multiple categories, choose the highest Bloom's level and most relevant task among them
 4. Overall feedback.
 """
     return prompt
@@ -110,18 +165,18 @@ def create_evaluation_document(
     rubric_data: dict[str, Any],
     filename: str,
     model_evals: dict[str, ModelEvaluation],
-    question_source_path: str = "data/question_cuboid.md",
-    rubric_source_path: str = "data/rubric_cuboid.json",
+    question_source_path: str = "data/question_insurance.md",
+    rubric_source_path: str = "data/rubric_insurance2.md",
 ) -> EvaluationDocument:
     # Context
     context = Context(
-        course_id="CS101",
-        course_name="Intro to CS",
+        course_id="COSC 111",
+        course_name="Intro to Programming",
         assignment_id=1,
-        assignment_title="Cuboid",  # Hardcoded as per grade_sergio.py
+        assignment_title="Insurance Compute",
         question_source_path=question_source_path,
         question_id="q1",
-        question_title="Cuboid Class",
+        question_title="Insurance Compute",
         rubric_source_path=rubric_source_path,
     )
 
@@ -137,19 +192,26 @@ def create_evaluation_document(
     # Rubric
     rubric_categories = []
     for cat in rubric_data["categories"]:
+        # Handle both old JSON format (name) and new MD format (task)
+        task_name = cat.get("task", cat.get("name", "Unknown Task"))
+        points = cat.get("points", cat.get("max_points", 0.0))
+
         rubric_categories.append(
             {
-                "category_id": cat["name"].lower().replace(" ", "_").replace("&", "and"),
-                "name": cat["name"],
-                "max_points": cat["points"],
+                "category_id": task_name.lower()
+                .replace(" ", "_")
+                .replace("&", "and")[:50],  # Truncate id
+                "task": task_name,
+                "points": float(points),
+                "bloom_level": cat.get("bloom_level", "Unspecified"),
                 "description": cat["description"],
             }
         )
 
     rubric = Rubric(
-        rubric_id="rubric_cuboid_v1",
-        title="Cuboid Assignment Rubric",
-        total_points=rubric_data["totalPoints"],
+        rubric_id="rubric_insurance_compute_v1",
+        title="Insurance Compute Rubric",
+        total_points=float(rubric_data["totalPoints"]),
         categories=rubric_categories,
     )
 
@@ -162,10 +224,4 @@ def create_evaluation_document(
         submission=submission,
         rubric=rubric,
         models=model_evals,
-        comparison=Comparison(
-            score_summary=generate_score_summary(model_evals),
-            pairwise_differences=generate_pairwise_differences(model_evals),
-            category_agreement=(cat_agreement := generate_category_agreement(model_evals)),
-            category_insights=generate_category_insights(cat_agreement),
-        ),
     )

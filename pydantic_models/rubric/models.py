@@ -10,8 +10,11 @@ class RubricCategory(BaseModel):
     category_id: str = Field(
         ..., description="Stable ID used in category_scores and misconceptions"
     )
-    name: str = Field(..., description="Display name for this rubric category")
-    max_points: int = Field(..., description="Maximum points for this category")
+    task: str = Field(..., description="The task name for this rubric category")
+    points: float = Field(..., description="Maximum points for this category")
+    bloom_level: str = Field(
+        ..., description="Bloom's taxonomy level for this category (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')"
+    )
     description: str = Field(
         ..., description="Detailed explanation of what this category is assessing"
     )
@@ -28,7 +31,7 @@ class Rubric(BaseModel):
 
     rubric_id: str = Field(..., description="Unique identifier for this rubric version")
     title: str = Field(..., description="Human-readable rubric name")
-    total_points: int = Field(..., description="Maximum score according to rubric")
+    total_points: float = Field(..., description="Maximum score according to rubric")
     categories: list[RubricCategory] = Field(
         ..., description="List of rubric categories with scoring criteria"
     )

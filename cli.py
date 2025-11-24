@@ -32,8 +32,13 @@ console = Console()
 # --- Configuration ---
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
 MAX_CONCURRENT_STUDENTS = 5
-MODELS = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
-BATCH_LIMIT = 25  # Process all students
+MODELS = [
+    "google/gemini-2.5-flash",
+    "openai/gpt-5.1",
+    "google/gemini-2.5-flash-lite",
+    "openai/gpt-5-nano",
+]
+BATCH_LIMIT = 3  # Process 3 students
 
 # --- Helper Functions ---
 
@@ -124,8 +129,8 @@ async def process_student_wrapper(
                     rubric_data,
                     filename,
                     valid_evals,
-                    question_source_path="data/question_cuboid.md",
-                    rubric_source_path="data/rubric_cuboid.json",
+                    question_source_path="data/question_insurance.md",
+                    rubric_source_path="data/rubric_insurance2.md",
                 )
 
                 output_dir = "student_evals"
@@ -219,8 +224,8 @@ def main():
         with console.status(
             "[bold yellow]Loading Assignment Resources...[/bold yellow]", spinner="dots"
         ):
-            question_text = load_question("data/question_cuboid.md")
-            rubric_data = load_rubric("data/rubric_cuboid.json")
+            question_text = load_question("data/question_insurance.md")
+            rubric_data = load_rubric("data/rubric_insurance2.md")
     except Exception as e:
         console.print(f"[red]Error loading resources: {e}[/red]")
         return
@@ -237,13 +242,14 @@ def main():
     table = Table(box=None, show_lines=False, pad_edge=False)
 
     table.add_column("Student", style="white")
-    table.add_column("Gemini", justify="right", style="cyan")
-    table.add_column("Kimi", justify="right", style="magenta")
+    table.add_column("GemFlash", justify="right", style="cyan")
+    table.add_column("GPT5.1", justify="right", style="green")
+    table.add_column("GemLite", justify="right", style="magenta")
+    table.add_column("GPT5N", justify="right", style="yellow")
     table.add_column("Avg", justify="right", style="bold white")
-    table.add_column("Diff", justify="right", style="yellow")
+    table.add_column("Range", justify="right", style="red")
     table.add_column("Conf", justify="right", style="blue")
     table.add_column("Flag", justify="center")
-    table.add_column("Comment", style="dim white")
 
     for res in results:
         student = res["student"]
@@ -257,65 +263,57 @@ def main():
                 "-",
                 "-",
                 "-",
+                "-",
+                "-",
                 "❌",
-                f"[red]{res.get('error', 'Unknown Error')}[/red]",
             )
             continue
 
         # Success Case
         evals = res["evals"]
 
-        gemini_eval = evals.get("google/gemini-2.5-flash-lite")
-        kimi_eval = evals.get("moonshotai/kimi-k2-0905")
+        # Get evaluations for each model
+        gemini_flash_eval = evals.get("google/gemini-2.5-flash")
+        gpt51_eval = evals.get("openai/gpt-5.1")
+        gemini_lite_eval = evals.get("google/gemini-2.5-flash-lite")
+        gpt5nano_eval = evals.get("openai/gpt-5-nano")
 
-        gemini_score = gemini_eval.scores.total_points_awarded if gemini_eval else 0
-        kimi_score = kimi_eval.scores.total_points_awarded if kimi_eval else 0
+        # Get scores
+        gemini_flash_score = gemini_flash_eval.scores.total_points_awarded if gemini_flash_eval else 0
+        gpt51_score = gpt51_eval.scores.total_points_awarded if gpt51_eval else 0
+        gemini_lite_score = gemini_lite_eval.scores.total_points_awarded if gemini_lite_eval else 0
+        gpt5nano_score = gpt5nano_eval.scores.total_points_awarded if gpt5nano_eval else 0
 
         # Handle missing models for average calc
         valid_scores = []
-        if gemini_eval:
-            valid_scores.append(gemini_score)
-        if kimi_eval:
-            valid_scores.append(kimi_score)
+        for ev in [gemini_flash_eval, gpt51_eval, gemini_lite_eval, gpt5nano_eval]:
+            if ev:
+                valid_scores.append(ev.scores.total_points_awarded)
 
         avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
-        diff = abs(gemini_score - kimi_score)
+        score_range = max(valid_scores) - min(valid_scores) if valid_scores else 0
 
         # Calculate average confidence
         confs = []
-        if gemini_eval:
-            confs.extend([cs.confidence for cs in gemini_eval.category_scores])
-        if kimi_eval:
-            confs.extend([cs.confidence for cs in kimi_eval.category_scores])
+        for ev in [gemini_flash_eval, gpt51_eval, gemini_lite_eval, gpt5nano_eval]:
+            if ev:
+                confs.extend([cs.confidence for cs in ev.category_scores])
 
         avg_conf = (sum(confs) / len(confs) * 100) if confs else 0
 
-        # Flag logic
-        flag = "✅" if diff <= 10 else "🚩"
-
-        # Comment logic
-        comment = "-"
-        if gemini_eval and kimi_eval:
-            if diff <= 5:
-                comment = "Models agree"
-            elif gemini_score < kimi_score:
-                comment = f"Gemini stricter (-{diff:.1f})"
-            else:
-                comment = f"Kimi stricter (-{diff:.1f})"
-        elif not gemini_eval:
-            comment = "Gemini Failed"
-        elif not kimi_eval:
-            comment = "Kimi Failed"
+        # Flag logic - flag if range is > 1.5 points (significant disagreement)
+        flag = "✅" if score_range <= 1.5 else "🚩"
 
         table.add_row(
             student,
-            f"{gemini_score:.1f}",
-            f"{kimi_score:.1f}",
+            f"{gemini_flash_score:.1f}" if gemini_flash_eval else "-",
+            f"{gpt51_score:.1f}" if gpt51_eval else "-",
+            f"{gemini_lite_score:.1f}" if gemini_lite_eval else "-",
+            f"{gpt5nano_score:.1f}" if gpt5nano_eval else "-",
             f"{avg_score:.1f}",
-            f"{diff:.1f}",
+            f"{score_range:.1f}",
             f"{avg_conf:.0f}%",
             flag,
-            comment,
         )
 
     console.print(table)

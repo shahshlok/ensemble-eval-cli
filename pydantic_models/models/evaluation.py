@@ -11,15 +11,14 @@ Top‑down structure of the final model:
     │   └─ rubric_prompt_id: str
 --- Everything from here is from the LLMEvaluationResponse model ---
     ├─ scores: Scores
-    │   ├─ total_points_awarded: int
-    │   ├─ max_points: int
+    │   ├─ total_points_awarded: float
+    │   ├─ max_points: float
     │   └─ percentage: float
     ├─ category_scores: list[CategoryScore]
     │   └─ CategoryScore
-    │       ├─ category_id: str
-    │       ├─ category_name: str
-    │       ├─ points_awarded: int
-    │       ├─ max_points: int
+    │       ├─ task: str
+    │       ├─ points_awarded: float
+    │       ├─ max_points: float
     │       ├─ reasoning: str
     │       ├─ confidence: float
     │       └─ reasoning_tokens: int
@@ -29,6 +28,8 @@ Top‑down structure of the final model:
     │   └─ areas_for_improvement: list[str]
     └─ misconceptions: list[Misconception]
         └─ Misconception
+            ├─ bloom_level: str
+            ├─ task: str
             ├─ name: str
             ├─ description: str
             ├─ confidence: float
@@ -41,7 +42,6 @@ Top‑down structure of the final model:
             │       ├─ line_start: int
             │       ├─ line_end: int
             │       └─ note: str
-            ├─ generated_by: str
             └─ validated_by: str | None
 """
 
@@ -65,10 +65,10 @@ class Scores(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    total_points_awarded: int = Field(
+    total_points_awarded: float = Field(
         ..., description="Sum of all category_scores[*].points_awarded"
     )
-    max_points: int = Field(
+    max_points: float = Field(
         ..., description="Maximum possible points (should match rubric.total_points)"
     )
     percentage: float = Field(
@@ -94,10 +94,9 @@ class CategoryScore(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    category_id: str = Field(..., description="Links to rubric.categories[*].category_id")
-    category_name: str = Field(..., description="Human-readable name of the category")
-    points_awarded: int = Field(..., description="Points this model gave in this category")
-    max_points: int = Field(..., description="Maximum possible points in this category")
+    task: str = Field(..., description="The task name from the rubric")
+    points_awarded: float = Field(..., description="Points this model gave in this category")
+    max_points: float = Field(..., description="Maximum possible points in this category")
     reasoning: str = Field(..., description="Category-specific reasoning for the score")
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Model's confidence in this category score (0-1)"
@@ -154,6 +153,13 @@ class Misconception(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    bloom_level: str = Field(
+        ...,
+        description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')",
+    )
+    task: str = Field(
+        ..., description="The task name from the rubric category where this misconception appears"
+    )
     name: str = Field(..., description="Human-readable label for this misconception")
     description: str = Field(
         ..., description="Description of what behavior/understanding this misconception reflects"
