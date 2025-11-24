@@ -1,6 +1,6 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-24 14:20:17
+**Generated:** 2025-11-24 14:37:32
 **Total Students Analyzed:** 26
 **Total Misconceptions Detected:** 111
 
@@ -12,24 +12,33 @@
 
 | Rank | Bloom Level | Task | Students Affected | Avg Confidence |
 |------|-------------|------|-------------------|----------------|
-| 1 | Analyze | Verifying email format and displaying re... | 14/26 (54%) | 0.85 |
+| 1 | Analyze | Verifying email format and displaying relevant error message | 14/26 (54%) | 0.85 |
 | 2 | Analyze | Computing the cost of insurance | 12/26 (46%) | 0.86 |
-| 3 | Apply | Checking rule 1 from the question and di... | 11/26 (42%) | 0.86 |
+| 3 | Apply | Checking rule 1 from the question and displaying relevant error message | 11/26 (42%) | 0.86 |
 | 4 | Evaluate | Style / Correctness | 10/26 (38%) | 0.86 |
-| 5 | Apply | Checking if age or accidents is negative... | 4/26 (15%) | 0.94 |
+| 5 | Apply | Checking if age or accidents is negative and displaying relevant error message | 4/26 (15%) | 0.94 |
+
+### Top Bloom Levels by Misconceptions
+
+| Rank | Bloom Level | Total Misconceptions | Students Affected | Avg Confidence |
+|------|-------------|---------------------|-------------------|----------------|
+| 1 | Analyze | 49 | 20/26 (77%) | 0.86 |
+| 2 | Apply | 38 | 14/26 (54%) | 0.86 |
+| 3 | Evaluate | 18 | 11/26 (42%) | 0.85 |
+| 4 | Understand | 6 | 5/26 (19%) | 0.90 |
 
 ### Most Common Misconceptions
 
 | Rank | Misconception | Bloom Level | Occurrences | Models Agreeing |
 |------|---------------|-------------|-------------|-----------------|
-| 1 | Missing Semicolon | Apply | 2 | 2 (gemini-2, gemini-2) |
-| 2 | Incorrect application of percentage... | Analyze | 2 | 1 (gemini-2) |
-| 3 | Case Sensitivity in Java | Apply | 1 | 1 (gemini-2) |
-| 4 | Basic Java Syntax Errors | Evaluate | 1 | 1 (gemini-2) |
+| 1 | Missing Semicolon | Apply | 2 | 2 (gemini-2.5-flash, gemini-2.5-flash-lite) |
+| 2 | Incorrect application of percentage... | Analyze | 2 | 1 (gemini-2.5-flash-lite) |
+| 3 | Case Sensitivity in Java | Apply | 1 | 1 (gemini-2.5-flash) |
+| 4 | Basic Java Syntax Errors | Evaluate | 1 | 1 (gemini-2.5-flash) |
 | 5 | Incomplete understanding of Java sy... | Evaluate | 1 | 1 (gpt-5.1) |
-| 6 | Incorrect Case Sensitivity for Syst... | Apply | 1 | 1 (gemini-2) |
-| 7 | Incorrect order of operations for p... | Analyze | 1 | 1 (gemini-2) |
-| 8 | Java type capitalization error | Analyze | 1 | 1 (gemini-2) |
+| 6 | Incorrect Case Sensitivity for Syst... | Apply | 1 | 1 (gemini-2.5-flash-lite) |
+| 7 | Incorrect order of operations for p... | Analyze | 1 | 1 (gemini-2.5-flash) |
+| 8 | Java type capitalization error | Analyze | 1 | 1 (gemini-2.5-flash) |
 | 9 | Accident surcharge not based on tot... | Analyze | 1 | 1 (gpt-5.1) |
 | 10 | Java type naming and program struct... | Evaluate | 1 | 1 (gpt-5.1) |
 
@@ -215,8 +224,8 @@
 
 ## Per-Student Summary
 
-| Student | Total Misconceptions | Weighted Severity | Top Bloom Level |
-|---------|---------------------|-------------------|-----------------|
+| Student | Total Misconceptions | Avg Model Confidence | Top Bloom Level |
+|---------|---------------------|---------------------|-----------------|
 | Adams_Sophia_100050 | 6 | 0.91 | Apply |
 | Brooks_Caleb_100051 | 10 | 0.86 | Analyze |
 | Campbell_Laura_100052 | 9 | 0.89 | Apply |
@@ -243,6 +252,81 @@
 | Xu_Chen_100073 | 6 | 0.84 | Apply |
 | Young_Bella_100074 | 2 | 0.88 | Analyze |
 | Zhang_Leo_100075 | 7 | 0.83 | Apply |
+
+---
+
+## Legend: Formulas and Metrics
+
+This section explains how each metric in the report is calculated:
+
+### Executive Summary Tables
+
+**Most Difficult Areas (by % of class affected)**
+
+- **Students Affected**: Count and percentage of students who had misconceptions for this Bloom Level + Task combination
+
+  $$\text{Students Affected \%} = \frac{\text{students with misconceptions}}{\text{total students}} \times 100\%$$
+
+- **Avg Confidence**: Average confidence score across all misconceptions in this category
+
+  $$\text{Avg Confidence} = \frac{\sum \text{confidence scores}}{\text{count(misconceptions)}}$$
+
+**Top Bloom Levels by Misconceptions**
+
+- **Total Misconceptions**: Total count of misconceptions flagged at this Bloom's Taxonomy level
+- **Students Affected**: Count and percentage of unique students with misconceptions at this Bloom level
+
+  $$\text{Students Affected \%} = \frac{\text{unique students with misconceptions}}{\text{total students}} \times 100\%$$
+
+- **Avg Confidence**: Average model confidence for misconceptions at this Bloom level
+
+  $$\text{Avg Confidence} = \frac{\sum \text{confidence scores}}{\text{count(misconceptions)}}$$
+
+**Most Common Misconceptions**
+
+- **Occurrences**: Number of times this specific misconception was detected across all students
+- **Models Agreeing**: Number of different models that detected this misconception
+  - Shows the specific model names that flagged it
+
+### Model Agreement Analysis
+
+- **Misconceptions Detected**: Total number of misconceptions each model identified across all students
+
+### Detailed Analysis by Bloom Level + Task
+
+- **Students Affected**: Students who had misconceptions in this category
+
+  $$\text{Students Affected \%} = \frac{\text{students with misconceptions}}{\text{total students}} \times 100\%$$
+
+- **Total Misconceptions**: Total count of misconceptions in this category
+- **Average Confidence**: Mean confidence score for misconceptions in this category
+
+  $$\text{Avg Confidence} = \frac{\sum \text{confidence scores}}{\text{count(misconceptions)}}$$
+
+- **Model Agreement Rate**: Proportion of models that agreed on misconceptions in this category
+
+  $$\text{Model Agreement Rate} = \text{average}\left(\frac{\text{models detecting each misconception}}{\text{total models}}\right)$$
+
+### Per-Student Summary
+
+- **Total Misconceptions**: Count of all misconceptions flagged for this student across all models
+- **Avg Model Confidence**: Average confidence across all misconceptions for this student
+
+  $$\text{Avg Model Confidence} = \frac{\sum_{i=1}^{n} \text{confidence}_i}{n}$$
+
+  where $n$ = count of misconceptions for the student
+
+  - Higher values indicate models are more confident about the misconceptions they detected
+- **Top Bloom Level**: The Bloom's Taxonomy level with the most misconceptions for this student
+
+### Confidence Scores
+
+All confidence scores range from 0.0 to 1.0:
+
+- **0.0 - 0.5**: Low confidence (uncertain/borderline misconception)
+- **0.5 - 0.7**: Moderate confidence
+- **0.7 - 0.9**: High confidence
+- **0.9 - 1.0**: Very high confidence (strong evidence of misconception)
 
 ---
 

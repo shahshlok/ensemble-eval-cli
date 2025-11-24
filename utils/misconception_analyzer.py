@@ -85,7 +85,7 @@ class StudentAnalysis:
     misconceptions_by_bloom: dict = field(default_factory=dict)
     misconceptions_by_task: dict = field(default_factory=dict)
     model_agreement: dict = field(default_factory=dict)
-    weighted_severity: float = 0.0
+    avg_misconception_confidence: float = 0.0
 
 
 @dataclass
@@ -203,7 +203,7 @@ class MisconceptionAnalyzer:
         }
 
         if total_count > 0:
-            analysis.weighted_severity = total_weighted_confidence / total_count
+            analysis.avg_misconception_confidence = total_weighted_confidence / total_count
 
         return analysis
 
@@ -345,11 +345,49 @@ class MisconceptionAnalyzer:
             lines.append("|------|-------------|------|-------------------|----------------|")
 
             for i, stat in enumerate(class_analysis.bloom_task_stats[:5], 1):
-                task_short = stat.task[:40] + "..." if len(stat.task) > 40 else stat.task
                 lines.append(
-                    f"| {i} | {stat.bloom_level} | {task_short} | "
+                    f"| {i} | {stat.bloom_level} | {stat.task} | "
                     f"{stat.student_count}/{stat.total_students} ({stat.percentage_affected:.0f}%) | "
                     f"{stat.avg_confidence:.2f} |"
+                )
+            lines.append("")
+
+        # Add Bloom Level Summary
+        bloom_level_summary: dict[str, dict] = defaultdict(
+            lambda: {"total": 0, "students": set(), "avg_confidence": []}
+        )
+        for record in self.misconception_records:
+            bloom_level_summary[record.bloom_level]["total"] += 1
+            bloom_level_summary[record.bloom_level]["students"].add(record.student_id)
+            bloom_level_summary[record.bloom_level]["avg_confidence"].append(record.confidence)
+
+        if bloom_level_summary:
+            lines.append("### Top Bloom Levels by Misconceptions")
+            lines.append("")
+            lines.append(
+                "| Rank | Bloom Level | Total Misconceptions | Students Affected | Avg Confidence |"
+            )
+            lines.append(
+                "|------|-------------|---------------------|-------------------|----------------|"
+            )
+
+            sorted_bloom = sorted(bloom_level_summary.items(), key=lambda x: -x[1]["total"])
+            for i, (bloom_level, data) in enumerate(sorted_bloom, 1):
+                student_count = len(data["students"])
+                percentage = (
+                    (student_count / class_analysis.total_students * 100)
+                    if class_analysis.total_students > 0
+                    else 0
+                )
+                avg_conf = (
+                    sum(data["avg_confidence"]) / len(data["avg_confidence"])
+                    if data["avg_confidence"]
+                    else 0
+                )
+                lines.append(
+                    f"| {i} | {bloom_level} | {data['total']} | "
+                    f"{student_count}/{class_analysis.total_students} ({percentage:.0f}%) | "
+                    f"{avg_conf:.2f} |"
                 )
             lines.append("")
 
@@ -420,8 +458,8 @@ class MisconceptionAnalyzer:
                 "",
                 "## Per-Student Summary",
                 "",
-                "| Student | Total Misconceptions | Weighted Severity | Top Bloom Level |",
-                "|---------|---------------------|-------------------|-----------------|",
+                "| Student | Total Misconceptions | Avg Model Confidence | Top Bloom Level |",
+                "|---------|---------------------|---------------------|-----------------|",
             ]
         )
 
@@ -436,12 +474,87 @@ class MisconceptionAnalyzer:
                 lines.append(
                     f"| {student_analysis.student_id} | "
                     f"{student_analysis.total_misconceptions} | "
-                    f"{student_analysis.weighted_severity:.2f} | "
+                    f"{student_analysis.avg_misconception_confidence:.2f} | "
                     f"{top_bloom} |"
                 )
 
         lines.extend(
             [
+                "",
+                "---",
+                "",
+                "## Legend: Formulas and Metrics",
+                "",
+                "This section explains how each metric in the report is calculated:",
+                "",
+                "### Executive Summary Tables",
+                "",
+                "**Most Difficult Areas (by % of class affected)**",
+                "",
+                "- **Students Affected**: Count and percentage of students who had misconceptions for this Bloom Level + Task combination",
+                "",
+                "  $$\\text{Students Affected \\%} = \\frac{\\text{students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
+                "",
+                "- **Avg Confidence**: Average confidence score across all misconceptions in this category",
+                "",
+                "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
+                "",
+                "**Top Bloom Levels by Misconceptions**",
+                "",
+                "- **Total Misconceptions**: Total count of misconceptions flagged at this Bloom's Taxonomy level",
+                "- **Students Affected**: Count and percentage of unique students with misconceptions at this Bloom level",
+                "",
+                "  $$\\text{Students Affected \\%} = \\frac{\\text{unique students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
+                "",
+                "- **Avg Confidence**: Average model confidence for misconceptions at this Bloom level",
+                "",
+                "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
+                "",
+                "**Most Common Misconceptions**",
+                "",
+                "- **Occurrences**: Number of times this specific misconception was detected across all students",
+                "- **Models Agreeing**: Number of different models that detected this misconception",
+                "  - Shows the specific model names that flagged it",
+                "",
+                "### Model Agreement Analysis",
+                "",
+                "- **Misconceptions Detected**: Total number of misconceptions each model identified across all students",
+                "",
+                "### Detailed Analysis by Bloom Level + Task",
+                "",
+                "- **Students Affected**: Students who had misconceptions in this category",
+                "",
+                "  $$\\text{Students Affected \\%} = \\frac{\\text{students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
+                "",
+                "- **Total Misconceptions**: Total count of misconceptions in this category",
+                "- **Average Confidence**: Mean confidence score for misconceptions in this category",
+                "",
+                "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
+                "",
+                "- **Model Agreement Rate**: Proportion of models that agreed on misconceptions in this category",
+                "",
+                "  $$\\text{Model Agreement Rate} = \\text{average}\\left(\\frac{\\text{models detecting each misconception}}{\\text{total models}}\\right)$$",
+                "",
+                "### Per-Student Summary",
+                "",
+                "- **Total Misconceptions**: Count of all misconceptions flagged for this student across all models",
+                "- **Avg Model Confidence**: Average confidence across all misconceptions for this student",
+                "",
+                "  $$\\text{Avg Model Confidence} = \\frac{\\sum_{i=1}^{n} \\text{confidence}_i}{n}$$",
+                "",
+                "  where $n$ = count of misconceptions for the student",
+                "",
+                "  - Higher values indicate models are more confident about the misconceptions they detected",
+                "- **Top Bloom Level**: The Bloom's Taxonomy level with the most misconceptions for this student",
+                "",
+                "### Confidence Scores",
+                "",
+                "All confidence scores range from 0.0 to 1.0:",
+                "",
+                "- **0.0 - 0.5**: Low confidence (uncertain/borderline misconception)",
+                "- **0.5 - 0.7**: Moderate confidence",
+                "- **0.7 - 0.9**: High confidence",
+                "- **0.9 - 1.0**: Very high confidence (strong evidence of misconception)",
                 "",
                 "---",
                 "",

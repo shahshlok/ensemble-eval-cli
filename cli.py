@@ -493,7 +493,7 @@ def run_misconception_analysis():
     student_table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
     student_table.add_column("Student", style="white")
     student_table.add_column("Total", justify="center", style="cyan")
-    student_table.add_column("Severity", justify="right", style="yellow")
+    student_table.add_column("Avg Confidence", justify="right", style="yellow")
     student_table.add_column("Top Bloom Level", style="magenta")
     student_table.add_column("Top Task", style="dim", max_width=30)
 
@@ -512,13 +512,13 @@ def run_misconception_analysis():
             )
             top_task_display = top_task[:27] + "..." if len(top_task) > 30 else top_task
 
-            student_table.add_row(
-                student_analysis.student_id,
-                str(student_analysis.total_misconceptions),
-                f"{student_analysis.weighted_severity:.2f}",
-                top_bloom,
-                top_task_display,
-            )
+        student_table.add_row(
+            student_analysis.student_id,
+            str(student_analysis.total_misconceptions),
+            f"{student_analysis.avg_misconception_confidence:.2f}",
+            top_bloom,
+            top_task_display,
+        )
 
     console.print(student_table)
     console.print()
