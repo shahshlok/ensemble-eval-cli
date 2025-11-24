@@ -172,18 +172,18 @@ def create_evaluation_document(
     rubric_data: dict[str, Any],
     filename: str,
     model_evals: dict[str, ModelEvaluation],
-    question_source_path: str = "data/question_cuboid.md",
-    rubric_source_path: str = "data/rubric_cuboid.json",
+    question_source_path: str = "data/question_insurance.md",
+    rubric_source_path: str = "data/rubric_insurance2.md",
 ) -> EvaluationDocument:
     # Context
     context = Context(
-        course_id="CS101",
-        course_name="Intro to CS",
+        course_id="COSC 111",
+        course_name="Intro to Programming",
         assignment_id=1,
-        assignment_title="Cuboid",  # Hardcoded as per grade_sergio.py
+        assignment_title="Insurance Compute",  
         question_source_path=question_source_path,
         question_id="q1",
-        question_title="Cuboid Class",
+        question_title="Insurance Compute",
         rubric_source_path=rubric_source_path,
     )
 
@@ -214,8 +214,8 @@ def create_evaluation_document(
         )
 
     rubric = Rubric(
-        rubric_id="rubric_cuboid_v1",
-        title="Assignment Rubric",
+        rubric_id="rubric_insurance_compute_v1",
+        title="Insurance Compute Rubric",
         total_points=float(rubric_data["totalPoints"]),
         categories=rubric_categories,
     )
