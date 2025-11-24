@@ -19,7 +19,7 @@ from utils.grading import (
 load_dotenv()
 console = Console()
 
-MODELS = ["google/gemini-2.5-flash-lite", "moonshotai/kimi-k2-0905"]
+MODELS = ["google/gemini-2.5-flash-lite", "openai/gpt-5-nano"]
 
 
 async def grade_single_student():
@@ -36,15 +36,14 @@ async def grade_single_student():
         console.print("[red]No students found.[/red]")
         return
 
-    # Use the median student (based on graded evaluations: 95.0% average score)
-    student_id = "Martin_Josh_100013"
+    student_id = "Valdez_Diego_100046"
     
     # Verify the student exists
     if student_id not in students:
-        console.print(f"[yellow]Median student {student_id} not found, selecting random...[/yellow]")
+        console.print(f"[yellow] student {student_id} not found, selecting random...[/yellow]")
         student_id = random.choice(students)
     
-    console.print(f"Selected Student: [cyan]{student_id}[/cyan] (median performer)")
+    console.print(f"Selected Student: [cyan]{student_id}[/cyan]")
 
     # 2. Load Resources
     try:
