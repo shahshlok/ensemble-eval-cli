@@ -338,21 +338,7 @@ class MisconceptionAnalyzer:
             "",
         ]
 
-        if class_analysis.topic_task_stats:
-            lines.append("### Most Difficult Areas (by % of class affected)")
-            lines.append("")
-            lines.append("| Rank | Topic | Task | Students Affected | Avg Confidence |")
-            lines.append("|------|-------|------|-------------------|----------------|")
-
-            for i, stat in enumerate(class_analysis.topic_task_stats[:5], 1):
-                lines.append(
-                    f"| {i} | {stat.topic} | {stat.task} | "
-                    f"{stat.student_count}/{stat.total_students} ({stat.percentage_affected:.0f}%) | "
-                    f"{stat.avg_confidence:.2f} |"
-                )
-            lines.append("")
-
-        # Add Topic Summary
+        # Add Topic Summary (Most Difficult Areas by unique topics)
         topic_summary: dict[str, dict] = defaultdict(
             lambda: {"total": 0, "students": set(), "avg_confidence": []}
         )
@@ -362,7 +348,7 @@ class MisconceptionAnalyzer:
             topic_summary[record.topic]["avg_confidence"].append(record.confidence)
 
         if topic_summary:
-            lines.append("### Top Topics by Misconceptions")
+            lines.append("### Most Difficult Areas (by % of class affected)")
             lines.append("")
             lines.append(
                 "| Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |"
@@ -371,7 +357,11 @@ class MisconceptionAnalyzer:
                 "|------|-------|---------------------|-------------------|----------------|"
             )
 
-            sorted_topic = sorted(topic_summary.items(), key=lambda x: -x[1]["total"])
+            sorted_topic = sorted(
+                topic_summary.items(),
+                key=lambda x: (len(x[1]["students"]), x[1]["total"]),
+                reverse=True
+            )
             for i, (topic, data) in enumerate(sorted_topic, 1):
                 student_count = len(data["students"])
                 percentage = (
@@ -427,32 +417,6 @@ class MisconceptionAnalyzer:
 
         lines.extend(
             [
-                "---",
-                "",
-                "## Per-Student Summary",
-                "",
-                "| Student | Total Misconceptions | Avg Model Confidence | Top Topic |",
-                "|---------|---------------------|---------------------|-----------|",
-            ]
-        )
-
-        for eval_doc in self.evaluations:
-            student_analysis = self.analyze_student(eval_doc.submission.student_id)
-            if student_analysis:
-                top_topic = (
-                    max(student_analysis.misconceptions_by_topic.items(), key=lambda x: x[1])[0]
-                    if student_analysis.misconceptions_by_topic
-                    else "N/A"
-                )
-                lines.append(
-                    f"| {student_analysis.student_id} | "
-                    f"{student_analysis.total_misconceptions} | "
-                    f"{student_analysis.avg_misconception_confidence:.2f} | "
-                    f"{top_topic} |"
-                )
-
-        lines.extend(
-            [
                 "",
                 "---",
                 "",
@@ -464,16 +428,7 @@ class MisconceptionAnalyzer:
                 "",
                 "**Most Difficult Areas (by % of class affected)**",
                 "",
-                "- **Students Affected**: Count and percentage of students who had misconceptions for this Topic + Task combination",
-                "",
-                "  $$\\text{Students Affected \\%} = \\frac{\\text{students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
-                "",
-                "- **Avg Confidence**: Average confidence score across all misconceptions in this category",
-                "",
-                "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
-                "",
-                "**Top Topics by Misconceptions**",
-                "",
+                "- **Topic**: The unique topic where misconceptions were detected",
                 "- **Total Misconceptions**: Total count of misconceptions flagged at this Topic",
                 "- **Students Affected**: Count and percentage of unique students with misconceptions at this Topic",
                 "",
@@ -482,6 +437,8 @@ class MisconceptionAnalyzer:
                 "- **Avg Confidence**: Average model confidence for misconceptions at this Topic",
                 "",
                 "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
+                "",
+                "Sorted by: Number of students affected (descending), then by total misconceptions (descending)",
                 "",
                 "**Most Common Misconceptions**",
                 "",
@@ -492,18 +449,6 @@ class MisconceptionAnalyzer:
                 "### Model Agreement Analysis",
                 "",
                 "- **Misconceptions Detected**: Total number of misconceptions each model identified across all students",
-                "",
-                "### Per-Student Summary",
-                "",
-                "- **Total Misconceptions**: Count of all misconceptions flagged for this student across all models",
-                "- **Avg Model Confidence**: Average confidence across all misconceptions for this student",
-                "",
-                "  $$\\text{Avg Model Confidence} = \\frac{\\sum_{i=1}^{n} \\text{confidence}_i}{n}$$",
-                "",
-                "  where $n$ = count of misconceptions for the student",
-                "",
-                "  - Higher values indicate models are more confident about the misconceptions they detected",
-                "- **Top Topic**: The Topic with the most misconceptions for this student",
                 "",
                 "### Confidence Scores",
                 "",
