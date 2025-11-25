@@ -1,6 +1,6 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-25 12:10:57
+**Generated:** 2025-11-25 12:18:01
 **Total Students Analyzed:** 97
 **Total Misconceptions Detected:** 56
 
@@ -26,11 +26,11 @@
 | 3 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
 | 4 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
 | 5 | Syntax errors prevent compilation | Variables | 1 | 1 (gpt-5-nano) |
-| 6 | Missing semicolon after print state... | Variables | 1 | 1 (gpt-5-nano) |
-| 7 | Misinterpreting the problem and irr... | Variables | 1 | 1 (gemini-2.5-flash-lite) |
+| 6 | Missing semicolon after print statement | Variables | 1 | 1 (gpt-5-nano) |
+| 7 | Misinterpreting the problem and irrelevant input/output | Variables | 1 | 1 (gemini-2.5-flash-lite) |
 | 8 | Incorrect data type usage | Variables | 1 | 1 (gemini-2.5-flash-lite) |
 | 9 | Wrong data types for velocity/time | Variables | 1 | 1 (gpt-5-nano) |
-| 10 | Inappropriate use of integer data t... | Data Types | 1 | 1 (gemini-2.5-flash-lite) |
+| 10 | Inappropriate use of integer data types | Data Types | 1 | 1 (gemini-2.5-flash-lite) |
 
 ---
 
@@ -38,10 +38,10 @@
 
 | Question | Submissions | Misconception Rate | Top Misconception | Topic Breakdown |
 |----------|-------------|-------------------|-------------------|-----------------|
-| Q1 | 25 | 10/25 (40%) | Incorrect operator preced... | Variables: 15, Reading: 3 |
+| Q1 | 25 | 10/25 (40%) | Incorrect operator precedence | Variables: 15, Reading: 3 |
 | Q2 | 25 | 5/25 (20%) | Missing Semicolon | Variables: 6, Reading: 3, Data: 1 |
-| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem R... | Variables: 8, Constants: 3, Data: 2, Reading: 1 |
-| Q4 | 23 | 9/23 (39%) | Missing semicolon after p... | Variables: 10, Reading: 2, Data: 2 |
+| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem Requirements | Variables: 8, Constants: 3, Data: 2, Reading: 1 |
+| Q4 | 23 | 9/23 (39%) | Missing semicolon after print statement | Variables: 10, Reading: 2, Data: 2 |
 
 ---
 

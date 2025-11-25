@@ -566,10 +566,9 @@ class MisconceptionAnalyzer:
             lines.append("|------|---------------|-------|-------------|-----------------|")
 
             for i, stat in enumerate(class_analysis.misconception_type_stats[:10], 1):
-                name_short = stat.name[:35] + "..." if len(stat.name) > 35 else stat.name
                 models_str = ", ".join(m.split("/")[-1] for m in stat.models_detecting)
                 lines.append(
-                    f"| {i} | {name_short} | {stat.topic} | "
+                    f"| {i} | {stat.name} | {stat.topic} | "
                     f"{stat.occurrence_count} | {stat.model_agreement_count} ({models_str}) |"
                 )
             lines.append("")
@@ -588,13 +587,7 @@ class MisconceptionAnalyzer:
             )
 
             for stat in class_analysis.question_stats:
-                top_misc = (
-                    stat.top_misconception[:25] + "..."
-                    if len(stat.top_misconception) > 25
-                    else stat.top_misconception
-                )
-                if not top_misc:
-                    top_misc = "-"
+                top_misc = stat.top_misconception if stat.top_misconception else "-"
 
                 # Format topic breakdown
                 topic_parts = []
