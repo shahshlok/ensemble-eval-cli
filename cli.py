@@ -441,8 +441,8 @@ def run_misconception_analysis():
     summary_text.append(f"{class_analysis.total_students}\n", style="cyan")
     summary_text.append("Total Misconceptions: ", style="bold")
     summary_text.append(f"{class_analysis.total_misconceptions}\n", style="magenta")
-    summary_text.append("Unique Bloom+Task Areas: ", style="bold")
-    summary_text.append(f"{len(class_analysis.bloom_task_stats)}\n", style="yellow")
+    summary_text.append("Unique Topic+Task Areas: ", style="bold")
+    summary_text.append(f"{len(class_analysis.topic_task_stats)}\n", style="yellow")
     summary_text.append("Unique Misconception Types: ", style="bold")
     summary_text.append(f"{len(class_analysis.misconception_type_stats)}", style="green")
 
@@ -456,26 +456,26 @@ def run_misconception_analysis():
     )
     console.print()
 
-    # Display Bloom + Task Table (Most Difficult Areas)
-    console.rule("[bold]Most Difficult Areas by Bloom Level + Task[/bold]")
+    # Display Topic + Task Table (Most Difficult Areas)
+    console.rule("[bold]Most Difficult Areas by Topic + Task[/bold]")
     console.print()
 
-    bloom_table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
-    bloom_table.add_column("Rank", style="dim", width=4)
-    bloom_table.add_column("Bloom Level", style="cyan")
-    bloom_table.add_column("Task", style="white", max_width=35)
-    bloom_table.add_column("Students", justify="center", style="yellow")
-    bloom_table.add_column("%", justify="right", style="magenta")
-    bloom_table.add_column("Avg Conf", justify="right", style="blue")
-    bloom_table.add_column("Agreement", justify="right", style="green")
+    topic_table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
+    topic_table.add_column("Rank", style="dim", width=4)
+    topic_table.add_column("Topic", style="cyan")
+    topic_table.add_column("Task", style="white", max_width=35)
+    topic_table.add_column("Students", justify="center", style="yellow")
+    topic_table.add_column("%", justify="right", style="magenta")
+    topic_table.add_column("Avg Conf", justify="right", style="blue")
+    topic_table.add_column("Agreement", justify="right", style="green")
 
-    for i, stat in enumerate(class_analysis.bloom_task_stats[:10], 1):
+    for i, stat in enumerate(class_analysis.topic_task_stats[:10], 1):
         # Truncate task name if too long
         task_display = stat.task[:32] + "..." if len(stat.task) > 35 else stat.task
 
-        bloom_table.add_row(
+        topic_table.add_row(
             str(i),
-            stat.bloom_level,
+            stat.topic,
             task_display,
             f"{stat.student_count}/{stat.total_students}",
             f"{stat.percentage_affected:.0f}%",
@@ -483,7 +483,7 @@ def run_misconception_analysis():
             f"{stat.model_agreement_rate:.0%}",
         )
 
-    console.print(bloom_table)
+    console.print(topic_table)
     console.print()
 
     # Display Misconception Types Table
@@ -493,7 +493,7 @@ def run_misconception_analysis():
     misconception_table = Table(box=box.SIMPLE, show_header=True, header_style="bold")
     misconception_table.add_column("Rank", style="dim", width=4)
     misconception_table.add_column("Misconception", style="white", max_width=40)
-    misconception_table.add_column("Bloom", style="cyan")
+    misconception_table.add_column("Topic", style="cyan")
     misconception_table.add_column("Count", justify="center", style="yellow")
     misconception_table.add_column("Students", justify="center", style="magenta")
     misconception_table.add_column("Models", justify="center", style="green")
@@ -505,7 +505,7 @@ def run_misconception_analysis():
         misconception_table.add_row(
             str(i),
             name_display,
-            stat.bloom_level,
+            stat.topic,
             str(stat.occurrence_count),
             f"{stat.student_count}/{stat.total_students}",
             f"{stat.model_agreement_count}/4",

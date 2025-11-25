@@ -20,11 +20,24 @@ from utils.openrouter_sdk import get_structured_response
 def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
     """
     Parses a markdown table rubric into a dictionary.
-    Expected columns: Tasks, Marks Assigned, Bloom's Level, Why?
+    Expected columns: Tasks, Marks, Topic, Why?
     """
     lines = md_content.splitlines()
     categories = []
     total_points = 0.0
+    title = "Rubric"
+    rubric_id = "rubric_unknown"
+
+    # Extract title from first heading line
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            title = stripped.lstrip("#").strip()
+            # Generate rubric_id from title
+            rubric_id = "rubric_" + title.lower().replace(" ", "_").replace("(", "").replace(
+                ")", ""
+            ).replace("-", "_")
+            break
 
     # Skip header and separator lines
     # Find the start of the table
@@ -42,7 +55,7 @@ def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
         # parts[0] is empty string before first |
         # parts[1] is Task
         # parts[2] is Marks
-        # parts[3] is Bloom's Level
+        # parts[3] is Topic
         # parts[4] is Why?
 
         if len(parts) < 5:
@@ -55,21 +68,20 @@ def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
         except ValueError:
             continue  # Skip if marks not parseable
 
-        bloom_level_full = parts[3]
-        # Extract "Understand" from "Level 2: Understand"
-        if ":" in bloom_level_full:
-            bloom_level = bloom_level_full.split(":", 1)[1].strip()
-        else:
-            bloom_level = bloom_level_full
-
+        topic = parts[3]
         description = parts[4] if len(parts) > 4 else ""
 
         categories.append(
-            {"task": task, "points": points, "bloom_level": bloom_level, "description": description}
+            {"task": task, "points": points, "topic": topic, "description": description}
         )
         total_points += points
 
-    return {"totalPoints": total_points, "categories": categories}
+    return {
+        "totalPoints": total_points,
+        "categories": categories,
+        "title": title,
+        "rubric_id": rubric_id,
+    }
 
 
 def load_question(file_path: str) -> str:
@@ -198,19 +210,23 @@ def create_evaluation_document(
 
         rubric_categories.append(
             {
-                "category_id": task_name.lower()
-                .replace(" ", "_")
-                .replace("&", "and")[:50],  # Truncate id
+                "category_id": task_name.lower().replace(" ", "_").replace("&", "and"),
                 "task": task_name,
                 "points": float(points),
-                "bloom_level": cat.get("bloom_level", "Unspecified"),
+                "topic": cat.get("topic", "Unspecified"),
                 "description": cat["description"],
             }
         )
 
+    # Extract rubric metadata from rubric_data or use sensible defaults
+    rubric_id = rubric_data.get(
+        "rubric_id", f"rubric_{rubric_data.get('title', 'unknown').lower().replace(' ', '_')}"
+    )
+    rubric_title = rubric_data.get("title", "Rubric")
+
     rubric = Rubric(
-        rubric_id="rubric_insurance_compute_v1",
-        title="Insurance Compute Rubric",
+        rubric_id=rubric_id,
+        title=rubric_title,
         total_points=float(rubric_data["totalPoints"]),
         categories=rubric_categories,
     )

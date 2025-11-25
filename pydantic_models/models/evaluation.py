@@ -28,7 +28,7 @@ Top‑down structure of the final model:
     │   └─ areas_for_improvement: list[str]
     └─ misconceptions: list[Misconception]
         └─ Misconception
-            ├─ bloom_level: str
+            ├─ topic: str
             ├─ task: str
             ├─ name: str
             ├─ description: str
@@ -153,9 +153,9 @@ class Misconception(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    bloom_level: str = Field(
+    topic: str = Field(
         ...,
-        description="Bloom's taxonomy level associated with this misconception (e.g., 'Understand', 'Apply', 'Analyze', 'Evaluate')",
+        description="The topic or concept associated with this misconception (e.g., 'Variables', 'Reading input from the keyboard')",
     )
     task: str = Field(
         ..., description="The task name from the rubric category where this misconception appears"
