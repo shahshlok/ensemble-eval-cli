@@ -17,11 +17,116 @@ from pathlib import Path
 from pydantic_models.evaluation import EvaluationDocument
 
 
+# Canonical topics aligned with course learning objectives
+CANONICAL_TOPICS = [
+    "Variables",
+    "Data Types",
+    "Constants",
+    "Reading input from the keyboard",
+]
+
+# Mapping from LLM-generated topics to canonical topics
+TOPIC_MAPPING: dict[str, str] = {
+    # Variables mappings
+    "variables": "Variables",
+    "variable declaration": "Variables",
+    "variable declaration and data types": "Variables",
+    "declaring variables": "Variables",
+    "formula application": "Variables",
+    "incorrect formula application": "Variables",
+    "incorrect formula": "Variables",
+    "mathematical formulas": "Variables",
+    "mathematical formulas and libraries": "Variables",
+    "mathematical operations and formula derivation": "Variables",
+    "computing acceleration using formula": "Variables",
+    "computing cost vs. distance between points": "Variables",
+    "distance calculation": "Variables",
+    "distance formula / exponentiation": "Variables",
+    "acceleration formula / physics": "Variables",
+    "heron's formula / triangle area": "Variables",
+    "problem decomposition and formula application": "Variables",
+    "operator precedence": "Variables",
+    "operator precedence and usage": "Variables",
+    "incorrect operator precedence": "Variables",
+    # Data Types mappings
+    "data types": "Data Types",
+    "variables, data types": "Data Types",
+    "inappropriate use of integer data types": "Data Types",
+    "wrong data types for velocity/time": "Data Types",
+    "type mismatch": "Data Types",
+    # Constants mappings (Math library, etc.)
+    "constants": "Constants",
+    "variables, constants": "Constants",
+    "math library": "Constants",
+    "exponentiation in java": "Constants",
+    "math.sqrt": "Constants",
+    "math.pow": "Constants",
+    # Reading input mappings
+    "reading input from the keyboard": "Reading input from the keyboard",
+    "input/output": "Reading input from the keyboard",
+    "scanner": "Reading input from the keyboard",
+    "input handling": "Reading input from the keyboard",
+    "incorrect input handling": "Reading input from the keyboard",
+    "resource management / input handling": "Reading input from the keyboard",
+    "resource management": "Reading input from the keyboard",
+    # Syntax-related -> map to Variables (closest fit for basic programming)
+    "syntax": "Variables",
+    "syntax errors": "Variables",
+    "java syntax": "Variables",
+    "java syntax and compilation rules": "Variables",
+    "java syntax/compilation": "Variables",
+    "missing semicolon": "Variables",
+    # Problem understanding -> map to Variables (indicates formula/logic issues)
+    "problem comprehension": "Variables",
+    "problem interpretation": "Variables",
+    "problem understanding": "Variables",
+    "problem understanding and task implementation": "Variables",
+    "problem solving / algorithmic thinking": "Variables",
+    "task understanding": "Variables",
+    "task mismatch: distance computation vs. fuel cost calculation": "Variables",
+    "programming fundamentals": "Variables",
+    # Output formatting -> map to Variables
+    "output formatting": "Variables",
+    "displaying output": "Variables",
+    # Error handling -> map to Variables
+    "error handling and program robustness": "Variables",
+    "division by zero handling": "Variables",
+}
+
+
+def normalize_topic(topic: str) -> str:
+    """Normalize an LLM-generated topic to a canonical topic.
+
+    Args:
+        topic: The raw topic string from the LLM.
+
+    Returns:
+        One of the 4 canonical topics.
+    """
+    # Check direct match first
+    if topic in CANONICAL_TOPICS:
+        return topic
+
+    # Try lowercase lookup
+    topic_lower = topic.lower().strip()
+    if topic_lower in TOPIC_MAPPING:
+        return TOPIC_MAPPING[topic_lower]
+
+    # Fuzzy matching: check if any mapping key is contained in the topic
+    for key, canonical in TOPIC_MAPPING.items():
+        if key in topic_lower or topic_lower in key:
+            return canonical
+
+    # Default fallback: Variables (most general category)
+    return "Variables"
+
+
 @dataclass
 class MisconceptionRecord:
     """A single misconception record with metadata."""
 
     student_id: str
+    question_id: str
     model_name: str
     topic: str
     task: str
@@ -29,6 +134,26 @@ class MisconceptionRecord:
     description: str
     confidence: float
     evidence_count: int
+
+
+@dataclass
+class QuestionStats:
+    """Statistics for a specific question."""
+
+    question_id: str
+    question_title: str
+    submission_count: int = 0
+    students_with_misconceptions: int = 0
+    total_misconceptions: int = 0
+    topic_breakdown: dict = field(default_factory=dict)
+    top_misconception: str = ""
+    top_misconception_count: int = 0
+
+    @property
+    def misconception_rate(self) -> float:
+        if self.submission_count == 0:
+            return 0.0
+        return (self.students_with_misconceptions / self.submission_count) * 100
 
 
 @dataclass
@@ -96,6 +221,7 @@ class ClassAnalysis:
     total_misconceptions: int = 0
     topic_task_stats: list[TopicTaskStats] = field(default_factory=list)
     misconception_type_stats: list[MisconceptionTypeStats] = field(default_factory=list)
+    question_stats: list[QuestionStats] = field(default_factory=list)
     model_agreement_summary: dict = field(default_factory=dict)
     generated_at: datetime = field(default_factory=datetime.now)
 
@@ -141,13 +267,18 @@ class MisconceptionAnalyzer:
 
         for eval_doc in self.evaluations:
             student_id = eval_doc.submission.student_id
+            question_id = eval_doc.context.question_id
 
             for model_name, model_eval in eval_doc.models.items():
                 for misconception in model_eval.misconceptions:
+                    # Normalize the topic to one of the 4 canonical topics
+                    normalized_topic = normalize_topic(misconception.topic)
+
                     record = MisconceptionRecord(
                         student_id=student_id,
+                        question_id=question_id,
                         model_name=model_name,
-                        topic=misconception.topic,
+                        topic=normalized_topic,
                         task=misconception.task,
                         name=misconception.name,
                         description=misconception.description,
@@ -312,6 +443,53 @@ class MisconceptionAnalyzer:
         analysis.misconception_type_stats.sort(key=lambda x: -x.occurrence_count)
         analysis.model_agreement_summary = dict(model_misconception_counts)
 
+        # Per-question analysis
+        question_data: dict[str, dict] = defaultdict(
+            lambda: {
+                "title": "",
+                "submissions": set(),
+                "students_with_misconceptions": set(),
+                "misconceptions": [],
+                "topics": defaultdict(int),
+            }
+        )
+
+        # Collect question metadata from evaluations
+        for eval_doc in self.evaluations:
+            q_id = eval_doc.context.question_id
+            question_data[q_id]["title"] = eval_doc.context.question_title
+            question_data[q_id]["submissions"].add(eval_doc.submission.student_id)
+
+        # Aggregate misconceptions by question
+        for record in self.misconception_records:
+            q_id = record.question_id
+            question_data[q_id]["students_with_misconceptions"].add(record.student_id)
+            question_data[q_id]["misconceptions"].append(record.name)
+            question_data[q_id]["topics"][record.topic] += 1
+
+        # Build QuestionStats
+        for q_id, data in sorted(question_data.items()):
+            misconception_counts = defaultdict(int)
+            for name in data["misconceptions"]:
+                misconception_counts[name] += 1
+
+            top_misconception = ""
+            top_count = 0
+            if misconception_counts:
+                top_misconception, top_count = max(misconception_counts.items(), key=lambda x: x[1])
+
+            stats = QuestionStats(
+                question_id=q_id,
+                question_title=data["title"],
+                submission_count=len(data["submissions"]),
+                students_with_misconceptions=len(data["students_with_misconceptions"]),
+                total_misconceptions=len(data["misconceptions"]),
+                topic_breakdown=dict(data["topics"]),
+                top_misconception=top_misconception,
+                top_misconception_count=top_count,
+            )
+            analysis.question_stats.append(stats)
+
         return analysis
 
     def generate_markdown_report(self, output_path: str = "misconception_report.md") -> str:
@@ -360,7 +538,7 @@ class MisconceptionAnalyzer:
             sorted_topic = sorted(
                 topic_summary.items(),
                 key=lambda x: (len(x[1]["students"]), x[1]["total"]),
-                reverse=True
+                reverse=True,
             )
             for i, (topic, data) in enumerate(sorted_topic, 1):
                 student_count = len(data["students"])
@@ -394,6 +572,43 @@ class MisconceptionAnalyzer:
                     f"| {i} | {name_short} | {stat.topic} | "
                     f"{stat.occurrence_count} | {stat.model_agreement_count} ({models_str}) |"
                 )
+            lines.append("")
+
+        # Per-Question Analysis
+        if class_analysis.question_stats:
+            lines.extend(
+                [
+                    "---",
+                    "",
+                    "## Per-Question Analysis",
+                    "",
+                    "| Question | Submissions | Misconception Rate | Top Misconception | Topic Breakdown |",
+                    "|----------|-------------|-------------------|-------------------|-----------------|",
+                ]
+            )
+
+            for stat in class_analysis.question_stats:
+                top_misc = (
+                    stat.top_misconception[:25] + "..."
+                    if len(stat.top_misconception) > 25
+                    else stat.top_misconception
+                )
+                if not top_misc:
+                    top_misc = "-"
+
+                # Format topic breakdown
+                topic_parts = []
+                for topic, count in sorted(stat.topic_breakdown.items(), key=lambda x: -x[1]):
+                    short_topic = topic.split()[0]  # Just first word
+                    topic_parts.append(f"{short_topic}: {count}")
+                topic_str = ", ".join(topic_parts) if topic_parts else "-"
+
+                lines.append(
+                    f"| {stat.question_id.upper()} | {stat.submission_count} | "
+                    f"{stat.students_with_misconceptions}/{stat.submission_count} ({stat.misconception_rate:.0f}%) | "
+                    f"{top_misc} | {topic_str} |"
+                )
+
             lines.append("")
 
         lines.extend(

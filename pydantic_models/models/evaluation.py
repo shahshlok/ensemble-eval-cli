@@ -45,7 +45,18 @@ Top‑down structure of the final model:
             └─ validated_by: str | None
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# Canonical topics for misconception classification (course learning objectives)
+CANONICAL_TOPICS = [
+    "Variables",
+    "Data Types",
+    "Constants",
+    "Reading input from the keyboard",
+]
 
 
 class Config(BaseModel):
@@ -155,7 +166,7 @@ class Misconception(BaseModel):
 
     topic: str = Field(
         ...,
-        description="The topic or concept associated with this misconception (e.g., 'Variables', 'Reading input from the keyboard')",
+        description="The topic or concept associated with this misconception. Should be one of: Variables, Data Types, Constants, Reading input from the keyboard",
     )
     task: str = Field(
         ..., description="The task name from the rubric category where this misconception appears"

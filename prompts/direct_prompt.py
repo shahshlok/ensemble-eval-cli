@@ -53,6 +53,11 @@ Please evaluate this submission and provide a structured response containing:
 4. **Misconceptions**:
    - Identify any specific misconceptions about the requirements or programming concepts.
    - For each misconception, provide:
+     - **Topic**: MUST be one of these exact values:
+       - "Variables" (declaring, assigning, using variables in expressions, formula application)
+       - "Data Types" (choosing int vs double, type conversions, type mismatches)
+       - "Constants" (using Math library methods like Math.sqrt, literal values, Math.pow)
+       - "Reading input from the keyboard" (Scanner usage, prompts, parsing input)
      - Name and description
      - Confidence (0-1)
      - Evidence (code snippet, file path, line numbers)

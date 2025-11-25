@@ -1,6 +1,6 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-25 11:50:02
+**Generated:** 2025-11-25 12:10:57
 **Total Students Analyzed:** 97
 **Total Misconceptions Detected:** 56
 
@@ -12,61 +12,36 @@
 
 | Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |
 |------|-------|---------------------|-------------------|----------------|
-| 1 | Variables | 6 | 5/97 (5%) | 0.81 |
-| 2 | Variables, Data types | 4 | 4/97 (4%) | 0.84 |
-| 3 | Reading input from the keyboard | 6 | 3/97 (3%) | 0.84 |
-| 4 | Problem Comprehension | 2 | 2/97 (2%) | 0.97 |
-| 5 | Problem Interpretation | 2 | 2/97 (2%) | 1.00 |
-| 6 | Variables, Constants | 2 | 2/97 (2%) | 0.75 |
-| 7 | Syntax Errors | 1 | 1/97 (1%) | 1.00 |
-| 8 | Java syntax and compilation rules | 1 | 1/97 (1%) | 0.80 |
-| 9 | Syntax | 1 | 1/97 (1%) | 1.00 |
-| 10 | Java syntax/Compilation | 1 | 1/97 (1%) | 0.75 |
-| 11 | Programming Fundamentals | 1 | 1/97 (1%) | 1.00 |
-| 12 | Input/Output | 1 | 1/97 (1%) | 1.00 |
-| 13 | Data Types | 1 | 1/97 (1%) | 1.00 |
-| 14 | Problem Solving / Algorithmic Thinking | 1 | 1/97 (1%) | 1.00 |
-| 15 | Variable Declaration and Data Types | 1 | 1/97 (1%) | 1.00 |
-| 16 | Mathematical Formulas and Libraries | 1 | 1/97 (1%) | 1.00 |
-| 17 | Distance calculation | 1 | 1/97 (1%) | 0.85 |
-| 18 | Problem Decomposition and Formula Application | 1 | 1/97 (1%) | 1.00 |
-| 19 | Task understanding | 1 | 1/97 (1%) | 0.92 |
-| 20 | Geometry / Coordinate Systems | 1 | 1/97 (1%) | 0.90 |
-| 21 | Problem Understanding and Task Implementation | 1 | 1/97 (1%) | 1.00 |
-| 22 | Computing acceleration using formula | 1 | 1/97 (1%) | 0.80 |
-| 23 | Computing cost vs. distance between points | 1 | 1/97 (1%) | 0.75 |
-| 24 | Problem Understanding | 1 | 1/97 (1%) | 1.00 |
-| 25 | Mathematical Formulas | 1 | 1/97 (1%) | 1.00 |
-| 26 | Task mismatch: distance computation vs. fuel cost calculation | 1 | 1/97 (1%) | 0.72 |
-| 27 | Heron's formula / Triangle area | 1 | 1/97 (1%) | 0.65 |
-| 28 | Operator precedence and usage | 1 | 1/97 (1%) | 1.00 |
-| 29 | Exponentiation in Java | 1 | 1/97 (1%) | 0.75 |
-| 30 | Distance formula / Exponentiation | 1 | 1/97 (1%) | 0.75 |
-| 31 | Acceleration formula / Physics | 1 | 1/97 (1%) | 0.75 |
-| 32 | Mathematical operations and formula derivation | 1 | 1/97 (1%) | 0.90 |
-| 33 | Output formatting | 1 | 1/97 (1%) | 0.80 |
-| 34 | Formula Application | 1 | 1/97 (1%) | 0.90 |
-| 35 | Java Syntax | 1 | 1/97 (1%) | 0.90 |
-| 36 | Error Handling and Program Robustness | 1 | 1/97 (1%) | 0.90 |
-| 37 | Division by zero handling | 1 | 1/97 (1%) | 0.60 |
-| 38 | Resource Management / Input Handling | 1 | 1/97 (1%) | 0.90 |
-| 39 | Resource Management | 1 | 1/97 (1%) | 0.80 |
-| 40 | Operator Precedence | 1 | 1/97 (1%) | 1.00 |
+| 1 | Variables | 39 | 11/97 (11%) | 0.88 |
+| 2 | Reading input from the keyboard | 9 | 4/97 (4%) | 0.86 |
+| 3 | Data Types | 5 | 4/97 (4%) | 0.87 |
+| 4 | Constants | 3 | 3/97 (3%) | 0.75 |
 
 ### Most Common Misconceptions
 
 | Rank | Misconception | Topic | Occurrences | Models Agreeing |
 |------|---------------|-------|-------------|-----------------|
-| 1 | Missing Semicolon | Syntax | 2 | 1 (gemini-2.5-flash-lite) |
+| 1 | Missing Semicolon | Variables | 2 | 1 (gemini-2.5-flash-lite) |
 | 2 | Incorrect input handling | Reading input from the keyboard | 2 | 1 (gemini-2.5-flash-lite) |
 | 3 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 4 | Incorrect operator precedence | Variables | 2 | 2 (gemini-2.5-flash-lite, gpt-5-nano) |
-| 5 | Syntax errors prevent compilation | Java syntax and compilation rules | 1 | 1 (gpt-5-nano) |
-| 6 | Missing semicolon after print state... | Java syntax/Compilation | 1 | 1 (gpt-5-nano) |
-| 7 | Misinterpreting the problem and irr... | Problem Comprehension | 1 | 1 (gemini-2.5-flash-lite) |
-| 8 | Incorrect data type usage | Programming Fundamentals | 1 | 1 (gemini-2.5-flash-lite) |
+| 4 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
+| 5 | Syntax errors prevent compilation | Variables | 1 | 1 (gpt-5-nano) |
+| 6 | Missing semicolon after print state... | Variables | 1 | 1 (gpt-5-nano) |
+| 7 | Misinterpreting the problem and irr... | Variables | 1 | 1 (gemini-2.5-flash-lite) |
+| 8 | Incorrect data type usage | Variables | 1 | 1 (gemini-2.5-flash-lite) |
 | 9 | Wrong data types for velocity/time | Variables | 1 | 1 (gpt-5-nano) |
 | 10 | Inappropriate use of integer data t... | Data Types | 1 | 1 (gemini-2.5-flash-lite) |
+
+---
+
+## Per-Question Analysis
+
+| Question | Submissions | Misconception Rate | Top Misconception | Topic Breakdown |
+|----------|-------------|-------------------|-------------------|-----------------|
+| Q1 | 25 | 10/25 (40%) | Incorrect operator preced... | Variables: 15, Reading: 3 |
+| Q2 | 25 | 5/25 (20%) | Missing Semicolon | Variables: 6, Reading: 3, Data: 1 |
+| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem R... | Variables: 8, Constants: 3, Data: 2, Reading: 1 |
+| Q4 | 23 | 9/23 (39%) | Missing semicolon after p... | Variables: 10, Reading: 2, Data: 2 |
 
 ---
 
