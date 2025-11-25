@@ -429,33 +429,6 @@ class MisconceptionAnalyzer:
             [
                 "---",
                 "",
-                "## Detailed Analysis by Topic + Task",
-                "",
-            ]
-        )
-
-        for stat in class_analysis.topic_task_stats:
-            lines.append(f"### {stat.topic}: {stat.task}")
-            lines.append("")
-            lines.append(
-                f"- **Students Affected:** {stat.student_count}/{stat.total_students} "
-                f"({stat.percentage_affected:.0f}%)"
-            )
-            lines.append(f"- **Total Misconceptions:** {stat.misconception_count}")
-            lines.append(f"- **Average Confidence:** {stat.avg_confidence:.2f}")
-            lines.append(f"- **Model Agreement Rate:** {stat.model_agreement_rate:.2%}")
-            lines.append("")
-
-            if stat.common_misconceptions:
-                lines.append("**Common Misconceptions:**")
-                for name, count in stat.common_misconceptions:
-                    lines.append(f"- {name} ({count} occurrences)")
-                lines.append("")
-
-        lines.extend(
-            [
-                "---",
-                "",
                 "## Per-Student Summary",
                 "",
                 "| Student | Total Misconceptions | Avg Model Confidence | Top Topic |",
@@ -519,21 +492,6 @@ class MisconceptionAnalyzer:
                 "### Model Agreement Analysis",
                 "",
                 "- **Misconceptions Detected**: Total number of misconceptions each model identified across all students",
-                "",
-                "### Detailed Analysis by Topic + Task",
-                "",
-                "- **Students Affected**: Students who had misconceptions in this category",
-                "",
-                "  $$\\text{Students Affected \\%} = \\frac{\\text{students with misconceptions}}{\\text{total students}} \\times 100\\%$$",
-                "",
-                "- **Total Misconceptions**: Total count of misconceptions in this category",
-                "- **Average Confidence**: Mean confidence score for misconceptions in this category",
-                "",
-                "  $$\\text{Avg Confidence} = \\frac{\\sum \\text{confidence scores}}{\\text{count(misconceptions)}}$$",
-                "",
-                "- **Model Agreement Rate**: Proportion of models that agreed on misconceptions in this category",
-                "",
-                "  $$\\text{Model Agreement Rate} = \\text{average}\\left(\\frac{\\text{models detecting each misconception}}{\\text{total models}}\\right)$$",
                 "",
                 "### Per-Student Summary",
                 "",
