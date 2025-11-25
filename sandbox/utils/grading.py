@@ -20,7 +20,7 @@ from sandbox.utils.openrouter_sdk import get_structured_response
 def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
     """
     Parses a markdown table rubric into a dictionary.
-    Expected columns: Tasks, Marks Assigned, Bloom's Level, Why?
+    Expected columns: Tasks, Marks Assigned, Topic, Why?
     """
     lines = md_content.splitlines()
     categories = []
@@ -42,7 +42,7 @@ def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
         # parts[0] is empty string before first |
         # parts[1] is Task
         # parts[2] is Marks
-        # parts[3] is Bloom's Level
+        # parts[3] is Topic
         # parts[4] is Why?
 
         if len(parts) < 6:
@@ -55,17 +55,12 @@ def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
         except ValueError:
             continue  # Skip if marks not parseable
 
-        bloom_level_full = parts[3]
-        # Extract "Understand" from "Level 2: Understand"
-        if ":" in bloom_level_full:
-            bloom_level = bloom_level_full.split(":", 1)[1].strip()
-        else:
-            bloom_level = bloom_level_full
+        topic = parts[3].strip()
 
         description = parts[4]
 
         categories.append(
-            {"task": task, "points": points, "bloom_level": bloom_level, "description": description}
+            {"task": task, "points": points, "topic": topic, "description": description}
         )
         total_points += points
 
@@ -126,10 +121,9 @@ Provide a structured output containing:
 1. Scores for each category in the rubric.
 2. Specific feedback for each category.
 3. Identification of any misconceptions. For each misconception:
-   - Include the Bloom's taxonomy level (from the rubric category where the misconception appears)
+   - Include the Topic (from the rubric category where the misconception appears)
    - Include the task name from the rubric category where the misconception appears
-   - Consider that misconceptions at higher Bloom's levels (e.g., Analyze, Evaluate) may indicate deeper conceptual gaps
-   - If a misconception spans multiple categories, choose the highest Bloom's level and most relevant task among them
+   - If a misconception spans multiple categories, choose the most relevant Topic and task among them
 4. Overall feedback.
 """
     return prompt
@@ -203,7 +197,7 @@ def create_evaluation_document(
                 .replace("&", "and")[:50],  # Truncate id
                 "task": task_name,
                 "points": float(points),
-                "bloom_level": cat.get("bloom_level", "Unspecified"),
+                "topic": cat.get("topic", "Unspecified"),
                 "description": cat["description"],
             }
         )
