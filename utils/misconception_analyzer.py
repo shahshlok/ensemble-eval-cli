@@ -9,6 +9,7 @@ This module processes evaluation JSON files from student_evals/ directory and pr
 """
 
 import json
+import difflib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -341,6 +342,48 @@ class MisconceptionAnalyzer:
 
         return self.misconception_records
 
+    def cluster_misconceptions(self, threshold: float = 0.8) -> dict[str, str]:
+        """Cluster similar misconception names using fuzzy matching.
+
+        Args:
+            threshold: Similarity threshold (0.0 to 1.0).
+
+        Returns:
+            Dictionary mapping original names to clustered canonical names.
+        """
+        if not self.misconception_records:
+            return {}
+
+        # Get all unique names sorted by frequency (most common first)
+        name_counts = defaultdict(int)
+        for record in self.misconception_records:
+            name_counts[record.name] += 1
+        
+        sorted_names = sorted(name_counts.keys(), key=lambda x: name_counts[x], reverse=True)
+        
+        clusters: dict[str, str] = {}
+        canonical_names: list[str] = []
+
+        for name in sorted_names:
+            # Try to find a match in existing canonical names
+            best_match = None
+            best_ratio = 0.0
+            
+            for canonical in canonical_names:
+                ratio = difflib.SequenceMatcher(None, name.lower(), canonical.lower()).ratio()
+                if ratio > best_ratio:
+                    best_ratio = ratio
+                    best_match = canonical
+            
+            if best_match and best_ratio >= threshold:
+                clusters[name] = best_match
+            else:
+                # New cluster
+                canonical_names.append(name)
+                clusters[name] = name
+                
+        return clusters
+
     def analyze_student(self, student_id: str) -> StudentAnalysis | None:
         """Analyze misconceptions for a specific student across all questions.
 
@@ -430,20 +473,26 @@ class MisconceptionAnalyzer:
 
         model_misconception_counts: dict[str, int] = defaultdict(int)
 
+        # Generate clusters
+        name_mapping = self.cluster_misconceptions(threshold=0.8)
+
         for record in self.misconception_records:
+            # Use clustered name
+            clustered_name = name_mapping.get(record.name, record.name)
+            
             key = (record.topic, record.task)
 
             topic_task_data[key]["students"].add(record.student_id)
-            topic_task_data[key]["misconceptions"].append(record.name)
+            topic_task_data[key]["misconceptions"].append(clustered_name)
             topic_task_data[key]["confidences"].append(record.confidence)
-            topic_task_data[key]["models"][record.name].add(record.model_name)
+            topic_task_data[key]["models"][clustered_name].add(record.model_name)
 
-            misconception_type_data[record.name]["students"].add(record.student_id)
-            misconception_type_data[record.name]["occurrences"] += 1
-            misconception_type_data[record.name]["confidences"].append(record.confidence)
-            misconception_type_data[record.name]["models"].add(record.model_name)
-            misconception_type_data[record.name]["topic"] = record.topic
-            misconception_type_data[record.name]["task"] = record.task
+            misconception_type_data[clustered_name]["students"].add(record.student_id)
+            misconception_type_data[clustered_name]["occurrences"] += 1
+            misconception_type_data[clustered_name]["confidences"].append(record.confidence)
+            misconception_type_data[clustered_name]["models"].add(record.model_name)
+            misconception_type_data[clustered_name]["topic"] = record.topic
+            misconception_type_data[clustered_name]["task"] = record.task
 
             model_misconception_counts[record.model_name] += 1
 
