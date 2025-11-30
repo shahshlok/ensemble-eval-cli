@@ -1,8 +1,8 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-25 17:11:40
+**Generated:** 2025-11-30 03:53:19
 **Total Students Analyzed:** 25
-**Total Misconceptions Detected:** 56
+**Total Misconceptions Detected:** 49
 
 ---
 
@@ -10,25 +10,26 @@
 
 | Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |
 |------|-------|---------------------|-------------------|----------------|
-| 1 | Variables | 39 | 11/25 (44%) | 0.88 |
-| 2 | Reading input from the keyboard | 9 | 4/25 (16%) | 0.86 |
-| 3 | Data Types | 5 | 4/25 (16%) | 0.87 |
-| 4 | Constants | 3 | 3/25 (12%) | 0.75 |
+| 1 | Other | 24 | 6/25 (24%) | 0.88 |
+| 2 | Variables | 8 | 6/25 (24%) | 0.86 |
+| 3 | Data Types | 6 | 4/25 (16%) | 0.89 |
+| 4 | Constants | 4 | 4/25 (16%) | 0.81 |
+| 5 | Reading input from the keyboard | 7 | 3/25 (12%) | 0.86 |
 
 ### Most Common Misconceptions
 
 | Rank | Misconception | Topic | Occurrences | Models Agreeing |
 |------|---------------|-------|-------------|-----------------|
-| 1 | Missing Semicolon | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 2 | Incorrect data type usage | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 3 | Incorrect input handling | Reading input from the keyboard | 2 | 1 (gemini-2.5-flash-lite) |
-| 4 | Misinterpreting Problem Requirements | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 5 | Incorrect application of distance formula | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 6 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
-| 7 | Incorrect use of exponentiation operator | Data Types | 2 | 1 (gemini-2.5-flash-lite) |
-| 8 | Missing Import Statement | Reading input from the keyboard | 2 | 2 (gemini-2.5-flash-lite, gpt-5-nano) |
-| 9 | Incorrect operator precedence | Variables | 2 | 2 (gemini-2.5-flash-lite, gpt-5-nano) |
-| 10 | Syntax errors prevent compilation | Variables | 1 | 1 (gpt-5-nano) |
+| 1 | Incorrect data type usage | Data Types | 2 | 1 (gemini-2.5-flash-lite) |
+| 2 | Incorrect input handling | Reading input from the keyboard | 2 | 1 (gemini-2.5-flash-lite) |
+| 3 | Misinterpreting Problem Requirements | Other | 2 | 1 (gemini-2.5-flash-lite) |
+| 4 | Incorrect application of distance formula | Other | 2 | 1 (gemini-2.5-flash-lite) |
+| 5 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
+| 6 | Incorrect use of exponentiation operator | Data Types | 2 | 1 (gemini-2.5-flash-lite) |
+| 7 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
+| 8 | Misinterpreting the problem and irrelevant input/output | Other | 1 | 1 (gemini-2.5-flash-lite) |
+| 9 | Wrong data types for velocity/time | Variables | 1 | 1 (gpt-5-nano) |
+| 10 | Inappropriate use of integer data types | Data Types | 1 | 1 (gemini-2.5-flash-lite) |
 
 ---
 
@@ -36,10 +37,10 @@
 
 | Question | Submissions | Misconception Rate | Top Misconception | Topic Breakdown |
 |----------|-------------|-------------------|-------------------|-----------------|
-| Q1 | 25 | 10/25 (40%) | Incorrect operator precedence | Variables: 15, Reading: 3 |
-| Q2 | 25 | 5/25 (20%) | Missing Semicolon | Variables: 6, Reading: 3, Data: 1 |
-| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem Requirements | Variables: 8, Constants: 3, Data: 2, Reading: 1 |
-| Q4 | 23 | 9/23 (39%) | Missing semicolon after print statement | Variables: 10, Reading: 2, Data: 2 |
+| Q1 | 25 | 7/25 (28%) | Incorrect operator precedence | Other: 7, Variables: 5, Reading: 1 |
+| Q2 | 25 | 4/25 (16%) | Incorrect input handling | Other: 5, Reading: 3, Data: 1 |
+| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem Requirements | Other: 5, Constants: 4, Data: 3, Reading: 1, Variables: 1 |
+| Q4 | 23 | 8/23 (35%) | Incorrect input handling | Other: 7, Reading: 2, Data: 2, Variables: 2 |
 
 ---
 
@@ -54,8 +55,8 @@ helping identify persistent misconceptions vs learning/improvement.
 |----------|-------|------------|
 | Struggled in both Q3 & Q4 | 4 | 17% |
 | Improved (Q3 issues → Q4 clean) | 2 | 9% |
-| Regressed (Q3 clean → Q4 issues) | 5 | 22% |
-| Consistent (no issues in either) | 12 | 52% |
+| Regressed (Q3 clean → Q4 issues) | 4 | 17% |
+| Consistent (no issues in either) | 13 | 57% |
 
 ### Key Metrics
 
@@ -69,8 +70,8 @@ helping identify persistent misconceptions vs learning/improvement.
 
 | Model | Misconceptions Detected |
 |-------|------------------------|
-| gemini-2.5-flash-lite | 35 |
-| gpt-5-nano | 21 |
+| gemini-2.5-flash-lite | 31 |
+| gpt-5-nano | 18 |
 
 
 ---
@@ -127,12 +128,5 @@ All confidence scores range from 0.0 to 1.0:
 - **Persistent Misconceptions**: Same misconception name detected in both Q3 and Q4 for the same student
 
 ---
-
-
----
-
-## Methodology Note
-
-**Misconception Clustering**: This report uses fuzzy string matching (threshold: 0.8) to group similar misconception names. For example, "Incorrect formula application" and "Formula Misapplication" are counted together. This provides a clearer view of high-level trends but may merge distinct but similarly-phrased errors.
 
 *Report generated by Ensemble Evaluation CLI - Misconception Analyzer*

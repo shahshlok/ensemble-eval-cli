@@ -50,12 +50,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-# Canonical topics for misconception classification (course learning objectives)
+# Canonical topics for misconception classification (from Assignment 2 rubric)
+# These are the actual learning objectives the assignment tests
 CANONICAL_TOPICS = [
-    "Variables",
-    "Data Types",
-    "Constants",
-    "Reading input from the keyboard",
+    "Variables",                         # Declaring, assigning, using in expressions
+    "Data Types",                        # int vs double, type conversions
+    "Constants",                         # Math library (Math.pow, Math.sqrt)
+    "Reading input from the keyboard",   # Scanner usage, prompts
+    "Other",                             # Catch-all for things that don't fit above
 ]
 
 
@@ -166,7 +168,7 @@ class Misconception(BaseModel):
 
     topic: str = Field(
         ...,
-        description="The topic or concept associated with this misconception. Should be one of: Variables, Data Types, Constants, Reading input from the keyboard",
+        description="The topic or concept associated with this misconception. Should be one of: Variables, Data Types, Constants, Reading input from the keyboard, or Other (if doesn't fit). Do NOT report syntax errors (missing semicolons, typos) as misconceptions.",
     )
     task: str = Field(
         ..., description="The task name from the rubric category where this misconception appears"

@@ -137,11 +137,28 @@ Evaluate the student's submission based on the provided rubric.
 Provide a structured output containing:
 1. Scores for each category in the rubric.
 2. Specific feedback for each category.
-3. Identification of any misconceptions. For each misconception:
-   - Include the Bloom's taxonomy level (from the rubric category where the misconception appears)
-   - Include the task name from the rubric category where the misconception appears
-   - Consider that misconceptions at higher Bloom's levels (e.g., Analyze, Evaluate) may indicate deeper conceptual gaps
-   - If a misconception spans multiple categories, choose the highest Bloom's level and most relevant task among them
+3. Identification of any **misconceptions** (IMPORTANT - read carefully):
+
+   A **misconception** is a fundamental misunderstanding of a concept, NOT a simple typo or syntax error.
+   
+   **REPORT these as misconceptions:**
+   - Using `int` instead of `double` for decimal calculations
+   - Using `^` instead of `Math.pow()` for exponentiation  
+   - Wrong formula (e.g., `(v1 + v0) / t` instead of `(v1 - v0) / t`)
+   - Not understanding integer division (`5/2` gives `2`, not `2.5`)
+   - Incorrect operator precedence
+   - Misinterpreting the problem requirements
+   
+   **DO NOT report these as misconceptions:**
+   - Missing semicolons, brackets, or braces (syntax typo)
+   - Misspelled variable names (typo)
+   - Missing import statements (mechanical)
+   - Formatting or whitespace issues
+   
+   For each misconception, specify:
+   - **Topic**: One of: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
+   - The task name from the rubric where it appears
+
 4. Overall feedback.
 """
     return prompt

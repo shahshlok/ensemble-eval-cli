@@ -18,51 +18,54 @@ from pathlib import Path
 from pydantic_models.evaluation import EvaluationDocument
 
 
-# Canonical topics aligned with course learning objectives
+# Canonical topics aligned with course learning objectives (from Assignment 2 rubric)
+# These are the actual topics the assignment was designed to test
 CANONICAL_TOPICS = [
-    "Variables",
-    "Data Types",
-    "Constants",
-    "Reading input from the keyboard",
+    "Variables",                         # Declaring, assigning, using in expressions
+    "Data Types",                        # int vs double, type conversions
+    "Constants",                         # Math library (Math.pow, Math.sqrt)
+    "Reading input from the keyboard",   # Scanner usage, prompts
 ]
 
+# Catch-all for misconceptions that don't fit the 4 course topics
+OTHER_TOPIC = "Other"
+
+# Topic for syntax errors - these are FILTERED OUT, not real misconceptions
+SYNTAX_TOPIC = "Syntax"
+
 # Mapping from LLM-generated topics to canonical topics
+# ONLY map things that clearly belong to a course topic; everything else goes to OTHER_TOPIC
 TOPIC_MAPPING: dict[str, str] = {
-    # Variables mappings
+    # Variables mappings (ONLY declaring, assigning, using variables in expressions)
     "variables": "Variables",
     "variable declaration": "Variables",
-    "variable declaration and data types": "Variables",
     "declaring variables": "Variables",
-    "formula application": "Variables",
-    "incorrect formula application": "Variables",
-    "incorrect formula": "Variables",
-    "mathematical formulas": "Variables",
-    "mathematical formulas and libraries": "Variables",
-    "mathematical operations and formula derivation": "Variables",
-    "computing acceleration using formula": "Variables",
-    "computing cost vs. distance between points": "Variables",
-    "distance calculation": "Variables",
-    "distance formula / exponentiation": "Variables",
-    "acceleration formula / physics": "Variables",
-    "heron's formula / triangle area": "Variables",
-    "problem decomposition and formula application": "Variables",
     "operator precedence": "Variables",
     "operator precedence and usage": "Variables",
     "incorrect operator precedence": "Variables",
-    # Data Types mappings
+    
+    # Data Types mappings (int vs double, type conversions, integer division)
     "data types": "Data Types",
     "variables, data types": "Data Types",
+    "variable declaration and data types": "Data Types",
     "inappropriate use of integer data types": "Data Types",
     "wrong data types for velocity/time": "Data Types",
     "type mismatch": "Data Types",
-    # Constants mappings (Math library, etc.)
+    "integer division": "Data Types",
+    "type conversion": "Data Types",
+    "casting": "Data Types",
+    "int vs double": "Data Types",
+    
+    # Constants mappings (Math library: Math.pow, Math.sqrt, exponentiation)
     "constants": "Constants",
     "variables, constants": "Constants",
     "math library": "Constants",
+    "mathematical formulas and libraries": "Constants",
     "exponentiation in java": "Constants",
     "math.sqrt": "Constants",
     "math.pow": "Constants",
-    # Reading input mappings
+    
+    # Reading input mappings (Scanner usage)
     "reading input from the keyboard": "Reading input from the keyboard",
     "input/output": "Reading input from the keyboard",
     "scanner": "Reading input from the keyboard",
@@ -70,43 +73,103 @@ TOPIC_MAPPING: dict[str, str] = {
     "incorrect input handling": "Reading input from the keyboard",
     "resource management / input handling": "Reading input from the keyboard",
     "resource management": "Reading input from the keyboard",
-    # Syntax-related -> map to Variables (closest fit for basic programming)
-    "syntax": "Variables",
-    "syntax errors": "Variables",
-    "java syntax": "Variables",
-    "java syntax and compilation rules": "Variables",
-    "java syntax/compilation": "Variables",
-    "missing semicolon": "Variables",
-    # Problem understanding -> map to Variables (indicates formula/logic issues)
-    "problem comprehension": "Variables",
-    "problem interpretation": "Variables",
-    "problem understanding": "Variables",
-    "problem understanding and task implementation": "Variables",
-    "problem solving / algorithmic thinking": "Variables",
-    "task understanding": "Variables",
-    "task mismatch: distance computation vs. fuel cost calculation": "Variables",
-    "programming fundamentals": "Variables",
-    # Output formatting -> map to Variables
-    "output formatting": "Variables",
-    "displaying output": "Variables",
-    # Error handling -> map to Variables
-    "error handling and program robustness": "Variables",
-    "division by zero handling": "Variables",
+    
+    # Other - catch-all for things that don't fit the 4 course topics
+    "formula application": OTHER_TOPIC,
+    "incorrect formula application": OTHER_TOPIC,
+    "incorrect formula": OTHER_TOPIC,
+    "mathematical formulas": OTHER_TOPIC,
+    "mathematical operations and formula derivation": OTHER_TOPIC,
+    "computing acceleration using formula": OTHER_TOPIC,
+    "computing cost vs. distance between points": OTHER_TOPIC,
+    "distance calculation": OTHER_TOPIC,
+    "distance formula / exponentiation": OTHER_TOPIC,
+    "acceleration formula / physics": OTHER_TOPIC,
+    "heron's formula / triangle area": OTHER_TOPIC,
+    "problem decomposition and formula application": OTHER_TOPIC,
+    "output formatting": OTHER_TOPIC,
+    "displaying output": OTHER_TOPIC,
+    "problem comprehension": OTHER_TOPIC,
+    "problem interpretation": OTHER_TOPIC,
+    "problem understanding": OTHER_TOPIC,
+    "problem understanding and task implementation": OTHER_TOPIC,
+    "problem solving / algorithmic thinking": OTHER_TOPIC,
+    "task understanding": OTHER_TOPIC,
+    "task mismatch: distance computation vs. fuel cost calculation": OTHER_TOPIC,
+    "programming fundamentals": OTHER_TOPIC,
+    "error handling and program robustness": OTHER_TOPIC,
+    "division by zero handling": OTHER_TOPIC,
+    "geometry / coordinate systems": OTHER_TOPIC,
+    
+    # Syntax-related -> FILTER OUT (not real misconceptions)
+    "syntax": SYNTAX_TOPIC,
+    "syntax errors": SYNTAX_TOPIC,
+    "java syntax": SYNTAX_TOPIC,
+    "java syntax and compilation rules": SYNTAX_TOPIC,
+    "java syntax/compilation": SYNTAX_TOPIC,
+    "missing semicolon": SYNTAX_TOPIC,
+    "compilation error": SYNTAX_TOPIC,
+    "typo": SYNTAX_TOPIC,
 }
 
+# Keywords that indicate a syntax error (not a real misconception)
+SYNTAX_ERROR_KEYWORDS = [
+    "semicolon",
+    "missing semicolon",
+    "typo",
+    "misspell",
+    "misspelled",
+    "spelling",
+    "whitespace",
+    "formatting",
+    "indentation",
+    "bracket",
+    "brace",
+    "parenthesis",
+    "compilation error",
+    "syntax error",
+    "missing import",
+    "import statement",
+]
 
-def normalize_topic(topic: str) -> str:
+
+def is_syntax_error(misconception_name: str, misconception_description: str) -> bool:
+    """Check if a misconception is actually just a syntax error (should be filtered).
+    
+    Args:
+        misconception_name: The name of the misconception.
+        misconception_description: The description of the misconception.
+        
+    Returns:
+        True if this is a syntax error that should be filtered out.
+    """
+    combined = f"{misconception_name} {misconception_description}".lower()
+    
+    for keyword in SYNTAX_ERROR_KEYWORDS:
+        if keyword in combined:
+            return True
+    
+    return False
+
+
+def normalize_topic(topic: str) -> str | None:
     """Normalize an LLM-generated topic to a canonical topic.
 
     Args:
         topic: The raw topic string from the LLM.
 
     Returns:
-        One of the 4 canonical topics.
+        One of the canonical topics, SYNTAX_TOPIC for syntax errors, or None for unknown.
     """
     # Check direct match first
     if topic in CANONICAL_TOPICS:
         return topic
+    
+    if topic == SYNTAX_TOPIC:
+        return SYNTAX_TOPIC
+    
+    if topic == OTHER_TOPIC:
+        return OTHER_TOPIC
 
     # Try lowercase lookup
     topic_lower = topic.lower().strip()
@@ -118,8 +181,8 @@ def normalize_topic(topic: str) -> str:
         if key in topic_lower or topic_lower in key:
             return canonical
 
-    # Default fallback: Variables (most general category)
-    return "Variables"
+    # Default fallback: Other (catch-all for things that don't fit course topics)
+    return OTHER_TOPIC
 
 
 @dataclass
@@ -310,13 +373,18 @@ class MisconceptionAnalyzer:
 
         return len(self.evaluations)
 
-    def extract_misconceptions(self) -> list[MisconceptionRecord]:
+    def extract_misconceptions(self, filter_syntax_errors: bool = True) -> list[MisconceptionRecord]:
         """Extract all misconceptions from loaded evaluations.
+
+        Args:
+            filter_syntax_errors: If True, filter out syntax errors (missing semicolons, typos, etc.)
+                                  that are not real conceptual misconceptions.
 
         Returns:
             List of MisconceptionRecord objects.
         """
         self.misconception_records = []
+        filtered_count = 0
 
         for eval_doc in self.evaluations:
             student_id = eval_doc.submission.student_id
@@ -324,8 +392,20 @@ class MisconceptionAnalyzer:
 
             for model_name, model_eval in eval_doc.models.items():
                 for misconception in model_eval.misconceptions:
-                    # Normalize the topic to one of the 4 canonical topics
+                    # Normalize the topic to one of the canonical topics
                     normalized_topic = normalize_topic(misconception.topic)
+                    
+                    # Filter out syntax errors if enabled
+                    if filter_syntax_errors:
+                        # Check if topic is syntax-related
+                        if normalized_topic == SYNTAX_TOPIC:
+                            filtered_count += 1
+                            continue
+                        
+                        # Check if name/description contains syntax error keywords
+                        if is_syntax_error(misconception.name, misconception.description):
+                            filtered_count += 1
+                            continue
 
                     record = MisconceptionRecord(
                         student_id=student_id,
@@ -339,6 +419,9 @@ class MisconceptionAnalyzer:
                         evidence_count=len(misconception.evidence),
                     )
                     self.misconception_records.append(record)
+
+        if filtered_count > 0:
+            print(f"[Filtered {filtered_count} syntax errors from misconception analysis]")
 
         return self.misconception_records
 

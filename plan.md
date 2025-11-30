@@ -66,19 +66,22 @@ Since we don't have real student data, we create a synthetic benchmark:
 
 ---
 
-## Topic Taxonomy (Revised)
+## Topic Taxonomy
 
-Current problem: "Variables" is a catch-all for everything.
-
-**New canonical topics for Assignment 2:**
+**Original course topics from Assignment 2 rubric** (kept pure and clean):
 
 | Topic | Description | Examples |
 |-------|-------------|----------|
-| **Data Types** | Choosing appropriate types | int vs double, type casting |
-| **Input Handling** | Scanner usage, parsing | Scanner methods, prompts |
-| **Mathematical Operations** | Formulas, operators | Math.pow, Math.sqrt, operator precedence |
-| **Output Formatting** | Displaying results | Print statements, string formatting |
-| **Syntax** | Language mechanics (FILTER OUT) | Semicolons, braces, spelling |
+| **Variables** | Declaring, assigning, using in expressions | Operator precedence |
+| **Data Types** | Choosing appropriate types | int vs double, type casting, integer division |
+| **Constants** | Math library usage | Math.pow, Math.sqrt |
+| **Reading input from the keyboard** | Scanner usage | Scanner methods, prompts, parsing |
+
+**Catch-all category:**
+| **Other** | Doesn't fit course topics | Problem understanding, formula application, output formatting |
+
+**Filtered out (not real misconceptions):**
+| **Syntax** | Mechanical errors | Missing semicolons, typos, missing imports |
 
 ---
 
@@ -99,21 +102,21 @@ Current problem: "Variables" is a catch-all for everything.
 
 ## Implementation Tasks (Priority Order)
 
-### Phase 1: Core Improvements (Week 1)
+### Phase 1: Core Improvements (Week 1) - COMPLETED
 
-- [ ] **1.1 Fix topic taxonomy**
-  - Update `CANONICAL_TOPICS` in `misconception_analyzer.py`
-  - Update `TOPIC_MAPPING` to use new categories
-  - Remove "Variables" catch-all
+- [x] **1.1 Keep original topic taxonomy**
+  - Kept original 4 course topics: Variables, Data Types, Constants, Reading input from the keyboard
+  - These align with the actual learning objectives from the assignment rubric
 
-- [ ] **1.2 Add misconception filtering**
-  - Create filter to exclude syntax errors (missing semicolon, typos)
-  - Add `is_real_misconception()` function
-  - Update prompt to distinguish misconceptions from mistakes
+- [x] **1.2 Add misconception filtering**
+  - Created `is_syntax_error()` function to detect and filter mechanical errors
+  - Filters: missing semicolons, typos, misspellings, missing imports, formatting
+  - Result: 7 syntax errors filtered, 49 real misconceptions remain
 
-- [ ] **1.3 Improve prompt for misconception quality**
-  - Update `direct_prompt.py` to define misconception vs mistake
-  - Add examples of what to report vs filter
+- [x] **1.3 Improve prompt for misconception quality**
+  - Updated `direct_prompt.py` and `grading.py` with clear examples
+  - REPORT: wrong data types, wrong formulas, operator precedence issues
+  - DO NOT REPORT: semicolons, typos, imports, formatting
 
 ### Phase 2: Validation Framework (Week 2)
 

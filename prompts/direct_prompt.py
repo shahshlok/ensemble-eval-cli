@@ -50,17 +50,35 @@ Please evaluate this submission and provide a structured response containing:
    - List of strengths
    - List of areas for improvement
 
-4. **Misconceptions**:
-   - Identify any specific misconceptions about the requirements or programming concepts.
-   - For each misconception, provide:
-     - **Topic**: MUST be one of these exact values:
-       - "Variables" (declaring, assigning, using variables in expressions, formula application)
-       - "Data Types" (choosing int vs double, type conversions, type mismatches)
-       - "Constants" (using Math library methods like Math.sqrt, literal values, Math.pow)
-       - "Reading input from the keyboard" (Scanner usage, prompts, parsing input)
-     - Name and description
-     - Confidence (0-1)
-     - Evidence (code snippet, file path, line numbers)
+4. **Misconceptions** (IMPORTANT - Read carefully):
+   
+   A **misconception** is a fundamental misunderstanding of a concept that reveals a gap in knowledge.
+   
+   **REPORT these as misconceptions:**
+   - Using `int` instead of `double` for decimal calculations (misunderstands data types)
+   - Using `^` instead of `Math.pow()` for exponentiation (misunderstands Java operators)
+   - Wrong formula like `(v1 + v0) / t` instead of `(v1 - v0) / t` (misunderstands the math)
+   - Not understanding integer division (`5/2` gives `2`, not `2.5`)
+   - Incorrect operator precedence in expressions
+   - Misinterpreting what the problem is asking for
+   
+   **DO NOT report these (they are NOT misconceptions):**
+   - Missing semicolons (syntax typo, not conceptual)
+   - Misspelled variable names (typo)
+   - Missing import statements (mechanical, not conceptual)
+   - Formatting or whitespace issues
+   - Missing braces or parentheses (syntax)
+   
+   For each misconception, provide:
+   - **Topic**: MUST be one of these exact values:
+     - "Variables" (declaring, assigning, using variables in expressions, operator precedence)
+     - "Data Types" (int vs double, type conversions, integer division)
+     - "Constants" (Math library methods: Math.pow, Math.sqrt)
+     - "Reading input from the keyboard" (Scanner usage, prompts, parsing input)
+     - "Other" (if doesn't fit any of the above course topics)
+   - Name and description (what concept they misunderstand)
+   - Confidence (0-1)
+   - Evidence (code snippet, file path, line numbers)
 
 Ensure you calculate the total points and percentage correctly.
 """.strip()
