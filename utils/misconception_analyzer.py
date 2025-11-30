@@ -887,9 +887,9 @@ class MisconceptionAnalyzer:
             
             for subcat, records in sorted(other_subcats.items(), key=lambda x: -len(x[1])):
                 count = len(records)
-                # Get unique misconception names as examples (max 2)
-                unique_names = list(set(r.name for r in records))[:2]
-                examples = ", ".join(f'"{n[:40]}..."' if len(n) > 40 else f'"{n}"' for n in unique_names)
+                # Get unique misconception names as examples (max 3, no truncation)
+                unique_names = list(set(r.name for r in records))[:3]
+                examples = ", ".join(f'"{n}"' for n in unique_names)
                 lines.append(f"| {subcat} | {count} | {examples} |")
             
             lines.append("")
