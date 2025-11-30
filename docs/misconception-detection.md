@@ -1,192 +1,261 @@
 # Misconception Detection System
 
-## Overview
+## What does this system do?
 
-The misconception detection system analyzes student code submissions using multiple LLMs to identify conceptual misunderstandings. It distinguishes between **real misconceptions** (conceptual gaps) and **mechanical errors** (typos, syntax).
+In simple terms: **It reads student code and figures out what concepts they don't understand.**
 
-## Architecture
+When a student makes an error, there are two possibilities:
+1. **They made a typo** - They know what to do, just made a mechanical mistake
+2. **They have a misconception** - They fundamentally misunderstand something
+
+This system finds the second type - the conceptual gaps that need teaching intervention.
+
+---
+
+## Why use AI for this?
+
+**The manual approach doesn't scale:**
+- 100 students × 4 questions = 400 submissions to review
+- Each submission might have multiple issues
+- TAs are expensive and inconsistent
+
+**The AI approach:**
+- Reviews all 400 submissions in minutes
+- Applies consistent criteria
+- Multiple AI models cross-check each other
+- Produces structured, analyzable data
+
+---
+
+## How it works (Step by Step)
+
+### Step 1: Gather the Inputs
+
+We need three things for each student:
+
+```
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│  STUDENT CODE   │   │    QUESTION     │   │     RUBRIC      │
+│                 │   │                 │   │                 │
+│  Their Q1.java  │   │  What they      │   │  What topics    │
+│  submission     │   │  were asked     │   │  we're testing  │
+│                 │   │  to do          │   │                 │
+└─────────────────┘   └─────────────────┘   └─────────────────┘
+```
+
+### Step 2: Ask the AI
+
+We send all three to an AI model with specific instructions:
+
+> "Look at this student's code. Based on the question and rubric, identify any **misconceptions** - places where they fundamentally misunderstand a concept. Don't report typos or syntax errors."
+
+We use **two different AI models** (Gemini and GPT) to cross-check. If both find the same issue, we're more confident it's real.
+
+### Step 3: AI Returns Structured Data
+
+The AI doesn't just say "there's a problem." It returns structured information:
+
+```
+Misconception Found:
+├── Topic: "Data Types"
+├── Name: "Using int instead of double"  
+├── Description: "Student used int for velocity which needs decimals"
+├── Confidence: 0.9 (very confident)
+└── Evidence: "int velocity = 3.5;" on line 5
+```
+
+### Step 4: We Clean and Organize
+
+Raw AI output is messy. Different models say things differently:
+- Model A: "Data type issue"
+- Model B: "Wrong variable type"
+- Model A: "Missing semicolon" (this shouldn't be here!)
+
+We **normalize** everything to standard categories and **filter out** syntax errors.
+
+### Step 5: Generate the Report
+
+Finally, we aggregate everything into a readable report:
+
+```
+Most Difficult Topics:
+1. Data Types - 6 students affected (24%)
+2. Variables - 8 students affected (32%)
+...
+```
+
+---
+
+## The Architecture (Visual)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                           SYSTEM ARCHITECTURE                                │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────┐     ┌─────────────┐     ┌─────────────────────────────────────┐
-│   Student   │     │   Question  │     │              Rubric                 │
-│ Submissions │     │    (Q1-Q4)  │     │  (Topics, Tasks, Points)            │
-│   (.java)   │     │    (.md)    │     │              (.md)                  │
-└──────┬──────┘     └──────┬──────┘     └──────────────────┬──────────────────┘
-       │                   │                               │
-       └───────────────────┼───────────────────────────────┘
-                           │
-                           ▼
-              ┌────────────────────────┐
-              │     Prompt Builder     │
-              │  (grading.py)          │
-              │                        │
-              │  • Question context    │
-              │  • Rubric criteria     │
-              │  • Student code        │
-              │  • Misconception guide │
-              └───────────┬────────────┘
-                          │
-                          ▼
-       ┌──────────────────────────────────────────┐
-       │           LLM Ensemble                   │
-       │                                          │
-       │  ┌─────────────┐    ┌─────────────┐     │
-       │  │   Gemini    │    │   GPT-5     │     │
-       │  │  Flash Lite │    │    Nano     │     │
-       │  └──────┬──────┘    └──────┬──────┘     │
-       │         │                  │            │
-       │         └────────┬─────────┘            │
-       │                  │                      │
-       └──────────────────┼──────────────────────┘
-                          │
-                          ▼
-              ┌────────────────────────┐
-              │   EvaluationDocument   │
-              │      (JSON)            │
-              │                        │
-              │  • Scores              │
-              │  • Feedback            │
-              │  • Misconceptions[]    │
-              │    - topic             │
-              │    - name              │
-              │    - description       │
-              │    - evidence          │
-              │    - confidence        │
-              └───────────┬────────────┘
-                          │
-                          ▼
-              ┌────────────────────────┐
-              │  MisconceptionAnalyzer │
-              │                        │
-              │  1. Load evaluations   │
-              │  2. Extract records    │
-              │  3. Normalize topics   │
-              │  4. Filter syntax      │
-              │  5. Cluster similar    │
-              │  6. Generate report    │
-              └───────────┬────────────┘
-                          │
-                          ▼
-              ┌────────────────────────┐
-              │  misconception_report  │
-              │        (.md)           │
-              └────────────────────────┘
+INPUT LAYER                    PROCESSING LAYER                 OUTPUT LAYER
+───────────                    ────────────────                 ────────────
+
+┌─────────────┐                                                
+│   Student   │                                                
+│ Submissions │────┐                                           
+│   (.java)   │    │                                           
+└─────────────┘    │          ┌────────────────────┐           
+                   │          │                    │           
+┌─────────────┐    ├─────────►│   PROMPT BUILDER   │           
+│   Question  │────┤          │                    │           
+│    (Q1-Q4)  │    │          │  Combines all      │           
+└─────────────┘    │          │  inputs into       │           
+                   │          │  a clear prompt    │           
+┌─────────────┐    │          │  for the AI        │           
+│   Rubric    │────┘          │                    │           
+│   (Topics)  │               └─────────┬──────────┘           
+└─────────────┘                         │                      
+                                        ▼                      
+                              ┌────────────────────┐           
+                              │                    │           
+                              │    AI ENSEMBLE     │           
+                              │                    │           
+                              │  ┌──────┐ ┌──────┐ │           
+                              │  │Gemini│ │ GPT  │ │           
+                              │  └──────┘ └──────┘ │           
+                              │                    │           
+                              │  Both models       │           
+                              │  analyze the       │           
+                              │  same code         │           
+                              │                    │           
+                              └─────────┬──────────┘           
+                                        │                      
+                                        ▼                      
+                              ┌────────────────────┐          ┌─────────────┐
+                              │                    │          │             │
+                              │     ANALYZER       │─────────►│   REPORT    │
+                              │                    │          │    (.md)    │
+                              │  • Normalize       │          │             │
+                              │  • Filter syntax   │          │  "44% of    │
+                              │  • Group by topic  │          │   students  │
+                              │  • Count patterns  │          │   had Data  │
+                              │                    │          │   Type      │
+                              └────────────────────┘          │   issues"   │
+                                                              │             │
+                                                              └─────────────┘
 ```
 
-## Data Flow
+---
 
-### Step 1: Grading
+## What the AI Looks For
+
+We explicitly tell the AI what counts as a misconception:
+
+### ✅ REPORT These (Real Misconceptions)
+
+| Issue | Why it's a misconception |
+|-------|-------------------------|
+| Using `int` instead of `double` | Doesn't understand when decimals are needed |
+| Using `^` for exponents | Doesn't know `^` is XOR in Java, not power |
+| Wrong formula `(v1+v0)/t` | Doesn't understand the physics/math |
+| Integer division confusion | Doesn't know `5/2 = 2` in Java |
+
+### ❌ DON'T Report These (Not Misconceptions)
+
+| Issue | Why it's not a misconception |
+|-------|------------------------------|
+| Missing semicolon | Typo - they know what to do |
+| Misspelled variable | Typo - would fix if pointed out |
+| Missing import | Mechanical - not conceptual |
+| Bad indentation | Style issue - not understanding |
+
+---
+
+## The Output: What You Get
+
+### EvaluationDocument (JSON)
+
+For each student × question, we save a JSON file:
+
+```json
+{
+  "student_id": "Chen_Wei_200023",
+  "question_id": "q1",
+  "models": {
+    "gemini-2.5-flash-lite": {
+      "scores": { "total": 3.5, "max": 4.0 },
+      "misconceptions": [
+        {
+          "topic": "Data Types",
+          "name": "Using int instead of double",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "gpt-5-nano": {
+      "scores": { "total": 3.0, "max": 4.0 },
+      "misconceptions": [
+        {
+          "topic": "Data Types", 
+          "name": "Integer type for decimal values",
+          "confidence": 0.85
+        }
+      ]
+    }
+  }
+}
+```
+
+Notice both models found the same issue (phrased differently). That's cross-validation!
+
+### Misconception Report (Markdown)
+
+The final human-readable report with:
+- Topic breakdown (which areas are hardest)
+- Common misconceptions (what specific issues appear most)
+- Per-question analysis (which questions cause problems)
+- Student progression (are they learning?)
+
+---
+
+## Technical Details (For Developers)
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `cli.py` | Main entry point, orchestrates grading |
+| `utils/grading.py` | Builds prompts, calls AI models |
+| `utils/misconception_analyzer.py` | Processes results, generates reports |
+| `pydantic_models/` | Data structures for type safety |
+
+### Key Functions
 
 ```python
-# cli.py orchestrates parallel grading
+# Grade one student's code with all models
 async def grade_student_with_models(student_code, question_text, rubric_data):
     prompt = construct_prompt(question_text, rubric_data, student_code)
-    
-    # Grade with multiple models in parallel
     results = await asyncio.gather(
         grade_with_model("gemini-2.5-flash-lite", prompt),
         grade_with_model("gpt-5-nano", prompt),
     )
     return results
-```
 
-### Step 2: LLM Response
-
-Each LLM returns structured output matching the `LLMEvaluationResponse` schema:
-
-```json
-{
-  "scores": { "total_points_awarded": 3.5, "max_points": 4.0 },
-  "feedback": { "overall_comment": "...", "strengths": [...] },
-  "misconceptions": [
-    {
-      "topic": "Data Types",
-      "task": "Declaring variables with appropriate data types",
-      "name": "Using int instead of double",
-      "description": "Student used int for velocity which should be double",
-      "confidence": 0.9,
-      "evidence": [{ "snippet": "int velocity = ...", "line_start": 5 }]
-    }
-  ]
-}
-```
-
-### Step 3: Analysis
-
-```python
-# misconception_analyzer.py
+# Analyze all evaluations
 analyzer = MisconceptionAnalyzer(evals_dir="student_evals")
-analyzer.load_evaluations()           # Load all JSON files
-analyzer.extract_misconceptions()      # Extract and normalize
-class_analysis = analyzer.analyze_class()  # Aggregate statistics
-analyzer.generate_markdown_report()    # Generate report
+analyzer.load_evaluations()
+analyzer.extract_misconceptions(filter_syntax_errors=True)
+analyzer.generate_markdown_report()
 ```
 
-## Key Components
-
-### MisconceptionRecord
-
-Internal representation of a single misconception:
-
-```python
-@dataclass
-class MisconceptionRecord:
-    student_id: str      # e.g., "Chen_Wei_200023"
-    question_id: str     # e.g., "q1"
-    model_name: str      # e.g., "google/gemini-2.5-flash-lite"
-    topic: str           # Normalized topic (one of 4 + Other)
-    task: str            # Task from rubric
-    name: str            # Misconception name
-    description: str     # Detailed description
-    confidence: float    # 0.0 to 1.0
-    evidence_count: int  # Number of evidence items
-```
-
-### ClassAnalysis
-
-Aggregated class-wide statistics:
-
-```python
-@dataclass
-class ClassAnalysis:
-    total_students: int
-    total_misconceptions: int
-    topic_task_stats: list[TopicTaskStats]
-    misconception_type_stats: list[MisconceptionTypeStats]
-    question_stats: list[QuestionStats]
-    progression_analysis: ProgressionAnalysis
-    model_agreement_summary: dict[str, int]
-```
-
-## Prompt Engineering
-
-The LLM prompt explicitly defines what is and isn't a misconception:
+### Data Flow
 
 ```
-REPORT these as misconceptions:
-- Using int instead of double for decimal calculations
-- Using ^ instead of Math.pow() for exponentiation
-- Wrong formula (e.g., (v1 + v0) / t instead of (v1 - v0) / t)
-- Not understanding integer division (5/2 gives 2, not 2.5)
-
-DO NOT report these as misconceptions:
-- Missing semicolons (syntax typo)
-- Misspelled variable names (typo)
-- Missing import statements (mechanical)
-- Formatting or whitespace issues
+cli.py (orchestrate)
+    ↓
+grading.py (call AI)
+    ↓
+openrouter_sdk.py (API calls)
+    ↓
+JSON files saved to student_evals/
+    ↓
+misconception_analyzer.py (analyze)
+    ↓
+misconception_report.md (output)
 ```
-
-## Output
-
-The system generates `misconception_report.md` with:
-
-1. **Topic Summary** - Most difficult areas by % of class affected
-2. **Other Breakdown** - Subcategories within the catch-all
-3. **Common Misconceptions** - Top 10 by occurrence
-4. **Per-Question Analysis** - Breakdown by Q1-Q4
-5. **Progression Analysis** - Q3→Q4 learning patterns
-6. **Model Agreement** - How many misconceptions each model found

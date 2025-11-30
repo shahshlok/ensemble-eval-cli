@@ -1,235 +1,290 @@
 # Filtering & Subcategories
 
-## Overview
+## What's the point?
 
-This document explains two key features:
-1. **Syntax Error Filtering** - Removing mechanical errors that aren't conceptual misconceptions
-2. **Other Subcategories** - Breaking down the catch-all "Other" category for visibility
+This document explains two important data cleaning steps:
 
-## Syntax Error Filtering
+1. **Filtering** - Removing things that aren't real misconceptions
+2. **Subcategorizing** - Breaking down the "Other" category so it's useful
 
-### What Gets Filtered
+---
+
+## Part 1: Filtering Syntax Errors
+
+### The Problem
+
+AI models sometimes report things like "missing semicolon" as misconceptions. But is forgetting a semicolon really a **misconception**?
+
+**No.** A misconception means the student doesn't understand something. Forgetting a semicolon is just a typo - they know what a semicolon is, they just forgot one.
+
+### What's the difference?
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SYNTAX ERROR FILTERING                              │
+│                    MISCONCEPTION vs SYNTAX ERROR                            │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    FILTERED OUT (Not Misconceptions)                │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  • Missing semicolons      "Student forgot ; at line 10"            │   │
-│  │  • Typos                   "Misspelled 'velocity' as 'velosity'"    │   │
-│  │  • Missing imports         "Missing import for Scanner"              │   │
-│  │  • Bracket/brace errors    "Missing closing brace"                  │   │
-│  │  • Formatting issues       "Inconsistent indentation"               │   │
-│  │  • Whitespace problems     "Extra spaces in expression"             │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│   MISCONCEPTION (Keep)                 SYNTAX ERROR (Filter Out)            │
+│   ────────────────────                 ─────────────────────────            │
 │                                                                             │
-│                                    │                                        │
-│                                    ▼                                        │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    KEPT (Real Misconceptions)                       │   │
-│  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │                                                                      │   │
-│  │  • int instead of double   "Used int for decimal calculations"      │   │
-│  │  • Wrong operator          "Used ^ instead of Math.pow()"           │   │
-│  │  • Wrong formula           "Used (v1+v0)/t instead of (v1-v0)/t"    │   │
-│  │  • Integer division        "Didn't understand 5/2 gives 2"          │   │
-│  │  • Operator precedence     "Wrong order of operations"              │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│   Student writes:                      Student writes:                      │
+│     int velocity = 3.5;                  System.out.println("Hi")           │
+│                                                              ▲              │
+│   They THINK int can hold              Missing semicolon ────┘              │
+│   decimal values. They're                                                   │
+│   WRONG about how types work.          They KNOW they need a semicolon.    │
+│                                        They just FORGOT it.                 │
+│   → Teaching opportunity               → Just point it out, they'll fix it │
+│   → Needs explanation                  → No conceptual gap                  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Implementation
+### What we filter out
 
-Two-layer filtering:
+| Filtered | Why |
+|----------|-----|
+| Missing semicolons | Typo, not conceptual |
+| Misspelled variables | Typo |
+| Missing import statements | Mechanical, not conceptual |
+| Missing brackets/braces | Typo |
+| Formatting issues | Style, not understanding |
+| Whitespace problems | Style |
 
-```python
-# Layer 1: Topic-based filtering
-if normalized_topic == SYNTAX_TOPIC:
-    filtered_count += 1
-    continue
+### What we keep
 
-# Layer 2: Keyword-based filtering
-SYNTAX_ERROR_KEYWORDS = [
-    "semicolon",
-    "missing semicolon",
-    "typo",
-    "misspell",
-    "misspelled",
-    "spelling",
-    "whitespace",
-    "formatting",
-    "indentation",
-    "bracket",
-    "brace",
-    "parenthesis",
-    "compilation error",
-    "syntax error",
-    "missing import",
-    "import statement",
-]
+| Kept | Why |
+|------|-----|
+| Using `int` instead of `double` | Doesn't understand types |
+| Using `^` instead of `Math.pow()` | Doesn't know Java operators |
+| Wrong formula | Doesn't understand the math |
+| Integer division confusion | Doesn't know `5/2 = 2` |
+| Wrong operator precedence | Doesn't understand order of operations |
 
-def is_syntax_error(name: str, description: str) -> bool:
-    """Check if a misconception is actually just a syntax error."""
-    combined = f"{name} {description}".lower()
-    
-    for keyword in SYNTAX_ERROR_KEYWORDS:
-        if keyword in combined:
-            return True
-    
-    return False
+### How filtering works
+
+We filter in **two layers**:
+
+```
+                    Raw Misconception from AI
+                              │
+                              ▼
+                 ┌────────────────────────┐
+                 │  LAYER 1: Topic Check  │
+                 │                        │
+                 │  Is the topic "Syntax" │
+                 │  or "syntax errors"?   │
+                 └────────────┬───────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+           Yes│                            No │
+              ▼                               ▼
+        ┌──────────┐             ┌────────────────────────┐
+        │ FILTERED │             │  LAYER 2: Keyword Check│
+        │   OUT    │             │                        │
+        └──────────┘             │  Does the name or      │
+                                 │  description contain:  │
+                                 │  "semicolon", "typo",  │
+                                 │  "misspell", "bracket",│
+                                 │  "import statement"?   │
+                                 └────────────┬───────────┘
+                                              │
+                              ┌───────────────┴───────────────┐
+                              │                               │
+                           Yes│                            No │
+                              ▼                               ▼
+                        ┌──────────┐                   ┌──────────┐
+                        │ FILTERED │                   │   KEPT   │
+                        │   OUT    │                   │          │
+                        └──────────┘                   └──────────┘
 ```
 
 ### Results
 
 ```
-Before filtering: 56 misconceptions
-After filtering:  49 misconceptions
-Filtered out:      7 syntax errors
+Before filtering: 56 misconceptions detected
+After filtering:  49 real misconceptions
+Removed:           7 syntax errors (12.5%)
 ```
 
-### Why Filter?
+### Why this matters for research
 
-**Research Validity**: A missing semicolon doesn't indicate a conceptual misunderstanding. The student would fix it if pointed out. Real misconceptions reveal gaps in understanding that need targeted instruction.
+If you're writing a paper that says "we detected 56 misconceptions," but 7 of those are just missing semicolons, your research is weaker.
 
-## Other Category Subcategories
+By filtering, we can confidently say: "We detected 49 conceptual misconceptions" - a more meaningful claim.
 
-### Problem
+---
 
-The "Other" category contains misconceptions that don't fit the 4 course topics. Without breakdown, it's a black box:
+## Part 2: Breaking Down "Other"
+
+### The Problem
+
+After categorizing misconceptions into the 4 course topics, some don't fit anywhere:
 
 ```
-Other: 24 (49%)   ← What's in here?
+Topic Breakdown:
+├── Data Types: 6 misconceptions
+├── Variables: 8 misconceptions  
+├── Constants: 4 misconceptions
+├── Reading Input: 7 misconceptions
+└── Other: 24 misconceptions  ← What's in here??
 ```
 
-### Solution
+"Other" is almost half the total! That's a black box - not useful for instructors.
 
-Semantic subcategorization using keyword matching:
+### The Solution
+
+We **subcategorize** the "Other" category into meaningful groups:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      OTHER CATEGORY BREAKDOWN                               │
+│                       "OTHER" BREAKDOWN                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  "Other" (24 total)                                                         │
+│  OTHER (24 total)                                                           │
 │       │                                                                     │
-│       ├──► Problem Understanding (10)                                       │
-│       │    • Misinterpreting requirements                                   │
-│       │    • Wrong approach                                                 │
-│       │    • Solving different problem                                      │
 │       │                                                                     │
-│       ├──► Formula Application (5)                                          │
-│       │    • Wrong formula usage                                            │
-│       │    • Distance/area calculation errors                               │
+│       ├───► PROBLEM UNDERSTANDING (10)                                      │
+│       │     │                                                               │
+│       │     │  Students who solved the wrong problem or                     │
+│       │     │  misunderstood what was being asked                          │
+│       │     │                                                               │
+│       │     ├── "Misinterpreting Problem Requirements"                      │
+│       │     ├── "Complete misunderstanding of the problem's objective"      │
+│       │     └── "Wrong approach / Solution not matching prompt"             │
 │       │                                                                     │
-│       ├──► Output Issues (1)                                                │
-│       │    • Incorrect output formatting                                    │
 │       │                                                                     │
-│       └──► Miscellaneous (8)                                                │
-│            • Doesn't match any pattern                                      │
+│       ├───► FORMULA APPLICATION (5)                                         │
+│       │     │                                                               │
+│       │     │  Students who used wrong math formulas                        │
+│       │     │  (not about Math library - that's "Constants")               │
+│       │     │                                                               │
+│       │     ├── "Incorrect application of distance formula"                 │
+│       │     ├── "Formula Misapplication"                                    │
+│       │     └── "Incorrect application of Heron's formula"                  │
+│       │                                                                     │
+│       │                                                                     │
+│       ├───► OUTPUT ISSUES (1)                                               │
+│       │     │                                                               │
+│       │     │  Students with output formatting problems                     │
+│       │     │                                                               │
+│       │     └── "Incorrect Output Value"                                    │
+│       │                                                                     │
+│       │                                                                     │
+│       └───► MISCELLANEOUS (8)                                               │
+│             │                                                               │
+│             │  Everything that doesn't match the above patterns             │
+│             │                                                               │
+│             ├── "Incorrect sign in velocity change"                         │
+│             ├── "Incorrect squaring operator"                               │
+│             └── "Incorrect data type usage" (in Other context)              │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Implementation
+### How subcategorization works
 
-Two-pass keyword matching (NAME first, then DESCRIPTION):
+We use **keyword matching** on the misconception name:
 
 ```python
-def get_other_subcategories(self) -> dict[str, list[MisconceptionRecord]]:
-    """Group misconceptions in 'Other' into sub-categories."""
-    
-    SUBCATEGORY_RULES = [
-        ("Formula Application", {
-            "name_keywords": ["formula", "distance", "acceleration", 
-                             "heron", "area", "geometry", "calculation"],
-            "description_keywords": []
-        }),
-        ("Problem Understanding", {
-            "name_keywords": ["misinterpret", "misunderstand", "wrong problem",
-                             "wrong approach", "different problem", 
-                             "problem requirement", "problem interpretation",
-                             "misappl", "disregard", "objective"],
-            "description_keywords": ["solved a different", "wrong problem", 
-                                    "misunderstood the"]
-        }),
-        ("Output Issues", {
-            "name_keywords": ["output", "display", "print"],
-            "description_keywords": []
-        }),
-        ("Algorithm/Logic", {
-            "name_keywords": ["algorithm", "logic error"],
-            "description_keywords": []
-        }),
-    ]
-
-    for record in other_records:
-        name_lower = record.name.lower()
-        desc_lower = record.description.lower()
-        
-        matched = False
-        
-        # First pass: match on NAME only (more reliable)
-        for subcat, rules in SUBCATEGORY_RULES:
-            for keyword in rules["name_keywords"]:
-                if keyword in name_lower:
-                    subcategories[subcat].append(record)
-                    matched = True
-                    break
-        
-        # Second pass: match on DESCRIPTION (stricter keywords)
-        if not matched:
-            for subcat, rules in SUBCATEGORY_RULES:
-                for keyword in rules["description_keywords"]:
-                    if keyword in desc_lower:
-                        subcategories[subcat].append(record)
-                        matched = True
-                        break
-        
-        # Fallback: Miscellaneous
-        if not matched:
-            subcategories["Miscellaneous"].append(record)
+SUBCATEGORY_RULES = [
+    ("Formula Application", {
+        "keywords": ["formula", "distance", "acceleration", "heron", "area"]
+    }),
+    ("Problem Understanding", {
+        "keywords": ["misinterpret", "misunderstand", "wrong problem", "wrong approach"]
+    }),
+    ("Output Issues", {
+        "keywords": ["output", "display", "print"]
+    }),
+]
 ```
 
-### Why Two-Pass?
+**Important:** We match on the **NAME** first, not the description. Why?
 
-**Problem**: Description often contains common words that cause false categorization.
+### The False Positive Problem
 
-Example:
-- Name: "Incorrect data type usage"
-- Description: "...if the correct **problem** were being solved..."
+Consider this misconception:
 
-If we match on description, "problem" would categorize this as "Problem Understanding" - wrong!
-
-**Solution**: Match on NAME first (more reliable), only fall back to DESCRIPTION with stricter keywords.
-
-### Report Output
-
-```markdown
-### 'Other' Category Breakdown
-
-The 'Other' category contains 24 misconceptions that don't fit the 4 course topics.
-These are grouped by semantic similarity:
-
-| Sub-category | Count | Examples |
-|--------------|-------|----------|
-| Problem Understanding | 10 | "Misinterpreting Problem Requirements", "Wrong approach" |
-| Miscellaneous | 8 | "Incorrect sign in velocity change", "Incorrect squaring" |
-| Formula Application | 5 | "Formula Misapplication", "Incorrect distance formula" |
-| Output Issues | 1 | "Incorrect Output Value" |
 ```
+Name: "Incorrect data type usage"
+Description: "The student uses int for variables, even though 
+             the correct PROBLEM would need double values..."
+```
+
+The description contains the word "problem" - but this isn't about problem understanding! It's about data types.
+
+If we matched on description, we'd wrongly categorize it.
+
+**Solution:** Match on NAME first (more reliable), only fall back to description with very specific phrases.
+
+```
+            Misconception Name
+                   │
+                   ▼
+          ┌─────────────────┐
+          │ PASS 1: Match   │
+          │ keywords in     │
+          │ NAME only       │
+          └────────┬────────┘
+                   │
+         ┌─────────┴─────────┐
+         │                   │
+      Match                No Match
+         │                   │
+         ▼                   ▼
+    ┌─────────┐    ┌─────────────────┐
+    │ Assign  │    │ PASS 2: Match   │
+    │ to that │    │ specific phrases│
+    │ subcat  │    │ in DESCRIPTION  │
+    └─────────┘    └────────┬────────┘
+                           │
+                  ┌────────┴────────┐
+                  │                 │
+               Match            No Match
+                  │                 │
+                  ▼                 ▼
+             ┌─────────┐      ┌──────────────┐
+             │ Assign  │      │ Assign to    │
+             │ to that │      │ "Miscellaneous│
+             │ subcat  │      └──────────────┘
+             └─────────┘
+```
+
+---
 
 ## Summary
 
-| Feature | Purpose | Result |
-|---------|---------|--------|
-| Syntax Filtering | Remove mechanical errors | 7 filtered, 49 real misconceptions |
-| Other Subcategories | Visibility into catch-all | 4 semantic groups |
-| Two-Pass Matching | Accurate categorization | No false positives |
+### What we do
+
+| Step | What | Why |
+|------|------|-----|
+| 1. Filter syntax errors | Remove semicolons, typos, imports | They're not conceptual |
+| 2. Normalize topics | Map to 4 course topics + Other | Consistent categories |
+| 3. Subcategorize Other | Break into Problem/Formula/Output/Misc | Visibility into catch-all |
+
+### The numbers
+
+```
+Raw from AI:           56 items
+After syntax filter:   49 items (7 removed)
+
+In course topics:      25 items
+  - Variables:          8
+  - Data Types:         6
+  - Constants:          4
+  - Reading Input:      7
+
+In Other:              24 items
+  - Problem Understanding: 10
+  - Miscellaneous:         8
+  - Formula Application:   5
+  - Output Issues:         1
+```
+
+### Why this matters
+
+1. **Research validity** - We can claim "49 real misconceptions" with confidence
+2. **Instructor usefulness** - Clear breakdown of what students struggle with
+3. **Transparency** - Nothing hidden in a black-box "Other" category

@@ -1,66 +1,74 @@
 # Report Generation
 
-## Overview
+## What is the report?
 
-The `generate_markdown_report()` method produces a comprehensive misconception analysis report. This document explains each section and the metrics used.
+The final output of our system is a **Markdown report** (`misconception_report.md`) that summarizes everything we found. It's designed to be readable by instructors, TAs, and researchers without needing to understand the technical details.
+
+---
 
 ## Report Structure
+
+The report has these sections:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          REPORT STRUCTURE                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. Header                                                                  │
-│     • Generated timestamp                                                   │
-│     • Total students analyzed                                               │
-│     • Total misconceptions detected                                         │
+│   1. HEADER                                                                 │
+│      • When was this generated?                                             │
+│      • How many students analyzed?                                          │
+│      • How many misconceptions found?                                       │
 │                                                                             │
-│  2. Most Difficult Areas                                                    │
-│     • Topic breakdown by % of class affected                                │
-│     • Shows all 5 categories (4 course + Other)                            │
+│   2. MOST DIFFICULT AREAS                                                   │
+│      • Which topics have the most misconceptions?                           │
+│      • What % of the class is affected?                                     │
 │                                                                             │
-│  3. 'Other' Category Breakdown                                              │
-│     • Subcategories within Other                                            │
-│     • Examples for each subcategory                                         │
+│   3. 'OTHER' BREAKDOWN                                                      │
+│      • What's in the catch-all category?                                    │
+│      • Grouped by sub-type                                                  │
 │                                                                             │
-│  4. Most Common Misconceptions                                              │
-│     • Top 10 by occurrence count                                            │
-│     • Model agreement for each                                              │
+│   4. MOST COMMON MISCONCEPTIONS                                             │
+│      • Top 10 specific misconceptions                                       │
+│      • How many models agreed?                                              │
 │                                                                             │
-│  5. Per-Question Analysis                                                   │
-│     • Q1-Q4 breakdown                                                       │
-│     • Misconception rate per question                                       │
-│     • Topic distribution per question                                       │
+│   5. PER-QUESTION ANALYSIS                                                  │
+│      • Which questions are hardest?                                         │
+│      • What topics come up in each question?                                │
 │                                                                             │
-│  6. Progression Analysis (Q3 → Q4)                                          │
-│     • Student progression tracking                                          │
-│     • Persistence vs improvement rates                                      │
+│   6. PROGRESSION ANALYSIS                                                   │
+│      • Are students improving from Q3 to Q4?                                │
+│      • Who struggled in both? Who improved?                                 │
 │                                                                             │
-│  7. Model Agreement Analysis                                                │
-│     • Misconceptions detected per model                                     │
-│                                                                             │
-│  8. Legend                                                                  │
-│     • Formulas and metric explanations                                      │
+│   7. MODEL AGREEMENT                                                        │
+│      • How many misconceptions did each AI find?                            │
+│      • Are they consistent?                                                 │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Section Details
+---
+
+## Section by Section
 
 ### 1. Header
 
 ```markdown
 # Misconception Analysis Report
 
-**Generated:** 2025-11-30 03:58:18
+**Generated:** 2025-11-30 04:02:37
 **Total Students Analyzed:** 25
 **Total Misconceptions Detected:** 49
 ```
 
-### 2. Most Difficult Areas
+**What it tells you:**
+- When the analysis was run
+- How many students were included
+- Total misconceptions found (after filtering syntax errors)
 
-Shows topics ranked by percentage of class affected:
+---
+
+### 2. Most Difficult Areas
 
 ```markdown
 | Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |
@@ -68,43 +76,70 @@ Shows topics ranked by percentage of class affected:
 | 1 | Other | 24 | 6/25 (24%) | 0.88 |
 | 2 | Variables | 8 | 6/25 (24%) | 0.86 |
 | 3 | Data Types | 6 | 4/25 (16%) | 0.89 |
-| 4 | Constants | 4 | 4/25 (16%) | 0.81 |
-| 5 | Reading input from the keyboard | 7 | 3/25 (12%) | 0.86 |
 ```
 
-**Metrics:**
-- **Total Misconceptions**: Count of misconceptions in this topic
-- **Students Affected**: `unique_students / total_students`
-- **Avg Confidence**: Mean of LLM confidence scores (0.0-1.0)
+**What it tells you:**
+- **Which topics are hardest** - Ranked by how many students are affected
+- **Scale of the problem** - "6 out of 25 students" gives context
+- **AI confidence** - Higher = more certain the misconceptions are real
 
-### 3. 'Other' Category Breakdown
+**How to read it:**
+
+> "24% of students had issues with Variables. The AI was 86% confident on average."
+
+**What to do with it:**
+
+If a topic has high percentage affected:
+- Consider spending more lecture time on it
+- Create additional practice materials
+- Review how it's being taught
+
+---
+
+### 3. 'Other' Breakdown
 
 ```markdown
-### 'Other' Category Breakdown
-
-The 'Other' category contains 24 misconceptions that don't fit the 4 course topics.
-These are grouped by semantic similarity:
-
 | Sub-category | Count | Examples |
 |--------------|-------|----------|
-| Problem Understanding | 10 | "Misinterpreting Problem Requirements", ... |
-| Miscellaneous | 8 | "Incorrect sign in velocity change", ... |
-| Formula Application | 5 | "Formula Misapplication", ... |
+| Problem Understanding | 10 | "Misinterpreting Problem Requirements", "Wrong approach" |
+| Miscellaneous | 8 | "Incorrect sign in velocity change", "Incorrect squaring" |
+| Formula Application | 5 | "Formula Misapplication", "Incorrect distance formula" |
 | Output Issues | 1 | "Incorrect Output Value" |
 ```
+
+**What it tells you:**
+- What's in the "Other" category (not hidden in a black box)
+- Most common sub-types
+- Specific examples
+
+**How to read it:**
+
+> "10 misconceptions were about Problem Understanding - students solving the wrong problem or misinterpreting requirements."
+
+---
 
 ### 4. Most Common Misconceptions
 
 ```markdown
 | Rank | Misconception | Topic | Occurrences | Models Agreeing |
 |------|---------------|-------|-------------|-----------------|
-| 1 | Incorrect data type usage | Data Types | 2 | 1 (gemini-2.5-flash-lite) |
-| 2 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
+| 1 | Incorrect data type usage | Data Types | 2 | 1 (gemini) |
+| 2 | Incorrect operator precedence | Variables | 2 | 2 (gemini, gpt) |
 ```
 
-**Metrics:**
-- **Occurrences**: Total times this misconception was detected
-- **Models Agreeing**: Number of different models that found this (higher = more confident)
+**What it tells you:**
+- **Specific issues** - Not just "Data Types" but exactly what's wrong
+- **How common** - Occurrences across all students
+- **Validation** - How many AI models agreed (2 = more confident)
+
+**How to read "Models Agreeing":**
+
+```
+1 model agreed  → Could be a false positive, less certain
+2 models agreed → Both AIs found the same thing, more confident
+```
+
+---
 
 ### 5. Per-Question Analysis
 
@@ -113,17 +148,29 @@ These are grouped by semantic similarity:
 |----------|-------------|-------------------|-------------------|-----------------|
 | Q1 | 25 | 7/25 (28%) | Incorrect operator precedence | Other: 7, Variables: 5 |
 | Q2 | 25 | 4/25 (16%) | Incorrect input handling | Other: 5, Reading: 3 |
-| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem Requirements | Other: 5, Constants: 4 |
+| Q3 | 24 | 6/24 (25%) | Misinterpreting Problem | Other: 5, Constants: 4 |
 | Q4 | 23 | 8/23 (35%) | Incorrect input handling | Other: 7, Reading: 2 |
 ```
 
-**Metrics:**
-- **Misconception Rate**: `students_with_misconceptions / submissions`
-- **Topic Breakdown**: Count per topic for that question
+**What it tells you:**
+- **Which questions are hardest** - Q4 has 35% misconception rate
+- **What's causing trouble** - Top misconception per question
+- **Topic distribution** - What concepts each question tests
 
-### 6. Progression Analysis
+**How to read it:**
 
-Tracks student learning between Q3 and Q4:
+> "Q4 is the hardest - 35% of students had misconceptions. The main issue was input handling."
+
+**What to do with it:**
+
+If a question has very high misconception rate:
+- Is the question unclear?
+- Is it testing something not well covered in lectures?
+- Should it be rewritten?
+
+---
+
+### 6. Progression Analysis (Q3 → Q4)
 
 ```markdown
 | Category | Count | Percentage |
@@ -134,13 +181,49 @@ Tracks student learning between Q3 and Q4:
 | Consistent (no issues in either) | 13 | 57% |
 ```
 
-**Key Metrics:**
+**What it tells you:**
+- **Are students learning?** - Compare Q3 to Q4 performance
+- **Persistent strugglers** - Students who had issues in both questions
+- **Improvement rate** - Who overcame their misconceptions
+
+**How to read it:**
+
 ```
-Persistence Rate = struggled_both / struggled_in_Q3 × 100%
-Improvement Rate = improved / struggled_in_Q3 × 100%
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       INTERPRETING PROGRESSION                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   "Struggled in both" (17%)                                                 │
+│   → These students need intervention                                        │
+│   → Their misconceptions persist across questions                           │
+│                                                                             │
+│   "Improved" (9%)                                                           │
+│   → Good sign! They learned from Q3                                         │
+│   → Or Q4 tests different concepts they understand better                   │
+│                                                                             │
+│   "Regressed" (17%)                                                         │
+│   → Q4 might be harder or test new concepts                                 │
+│   → Worth investigating what changed                                        │
+│                                                                             │
+│   "Consistent good" (57%)                                                   │
+│   → Majority of class is doing fine                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 7. Model Agreement Analysis
+**Key Metrics:**
+
+```
+Persistence Rate = struggled_both / struggled_in_Q3 × 100%
+                 = 4 / 6 = 67%
+
+"67% of students who struggled in Q3 also struggled in Q4"
+→ Misconceptions are persisting, need intervention
+```
+
+---
+
+### 7. Model Agreement
 
 ```markdown
 | Model | Misconceptions Detected |
@@ -149,75 +232,98 @@ Improvement Rate = improved / struggled_in_Q3 × 100%
 | gpt-5-nano | 18 |
 ```
 
-Shows which models are more/less aggressive in detecting misconceptions.
+**What it tells you:**
+- **Model behavior** - Which AI is more/less aggressive in detecting issues
+- **Consistency** - Large differences might indicate one model is too sensitive
 
-## Generation Code
+**How to read it:**
 
-```python
-def generate_markdown_report(self, output_path: str = "misconception_report.md") -> str:
-    """Generate a markdown report of the analysis."""
-    
-    class_analysis = self.analyze_class()
-    
-    lines = [
-        "# Misconception Analysis Report",
-        "",
-        f"**Generated:** {class_analysis.generated_at.strftime('%Y-%m-%d %H:%M:%S')}",
-        f"**Total Students Analyzed:** {class_analysis.total_students}",
-        f"**Total Misconceptions Detected:** {class_analysis.total_misconceptions}",
-    ]
-    
-    # Build topic summary
-    topic_summary = defaultdict(lambda: {"total": 0, "students": set(), "avg_confidence": []})
-    for record in self.misconception_records:
-        topic_summary[record.topic]["total"] += 1
-        topic_summary[record.topic]["students"].add(record.student_id)
-        topic_summary[record.topic]["avg_confidence"].append(record.confidence)
-    
-    # Add Other subcategories
-    other_subcats = self.get_other_subcategories()
-    if other_subcats:
-        # ... render subcategory table
-    
-    # Continue building report...
-    
-    content = "\n".join(lines)
-    with open(output_path, "w") as f:
-        f.write(content)
-    
-    return content
+> "Gemini found 31 misconceptions, GPT found 18. Gemini might be more sensitive, or GPT might miss some issues."
+
+---
+
+## How to Use the Report
+
+### For Instructors
+
+1. **Check "Most Difficult Areas"** - Which topics need more lecture time?
+2. **Check "Per-Question Analysis"** - Are any questions too hard or unclear?
+3. **Check "Progression Analysis"** - Are students improving?
+
+### For TAs
+
+1. **Check "Most Common Misconceptions"** - What to look for when grading
+2. **Check "Progression Analysis"** - Which students need extra help?
+
+### For Researchers
+
+1. **Check all sections** - Data for your paper
+2. **Note model agreement** - Important for validity claims
+3. **Note filtering** - "49 real misconceptions" after filtering
+
+---
+
+## Generating the Report
+
+### Command Line
+
+```bash
+uv run python cli.py analyze
 ```
 
-## Customization
-
-### Changing Top N
-
-To show more/fewer items in "Most Common Misconceptions":
+### Programmatically
 
 ```python
-# In generate_markdown_report()
-for i, stat in enumerate(class_analysis.misconception_type_stats[:10], 1):  # Change 10
+from utils.misconception_analyzer import MisconceptionAnalyzer
+
+analyzer = MisconceptionAnalyzer(evals_dir="student_evals")
+analyzer.load_evaluations()
+analyzer.extract_misconceptions(filter_syntax_errors=True)
+analyzer.generate_markdown_report("misconception_report.md")
 ```
 
-### Adding New Sections
+### Custom Output Path
 
-Add new sections by appending to the `lines` list:
-
-```python
-lines.extend([
-    "---",
-    "",
-    "## New Section Title",
-    "",
-    # ... section content
-])
-```
-
-## Output Location
-
-Default: `misconception_report.md` in project root.
-
-Can be customized:
 ```python
 analyzer.generate_markdown_report("reports/analysis_2025-11-30.md")
+```
+
+---
+
+## Example Report Output
+
+Here's what a complete report looks like:
+
+```markdown
+# Misconception Analysis Report
+
+**Generated:** 2025-11-30 04:02:37
+**Total Students Analyzed:** 25
+**Total Misconceptions Detected:** 49
+
+---
+
+### Most Difficult Areas (by % of class affected)
+
+| Rank | Topic | Total Misconceptions | Students Affected | Avg Confidence |
+|------|-------|---------------------|-------------------|----------------|
+| 1 | Other | 24 | 6/25 (24%) | 0.88 |
+| 2 | Variables | 8 | 6/25 (24%) | 0.86 |
+| 3 | Data Types | 6 | 4/25 (16%) | 0.89 |
+| 4 | Constants | 4 | 4/25 (16%) | 0.81 |
+| 5 | Reading input from the keyboard | 7 | 3/25 (12%) | 0.86 |
+
+### 'Other' Category Breakdown
+
+The 'Other' category contains 24 misconceptions that don't fit the 4 course topics.
+These are grouped by semantic similarity:
+
+| Sub-category | Count | Examples |
+|--------------|-------|----------|
+| Problem Understanding | 10 | "Misinterpreting Problem Requirements", "Wrong approach" |
+| Miscellaneous | 8 | "Incorrect sign in velocity change", "Incorrect squaring" |
+| Formula Application | 5 | "Formula Misapplication", "Incorrect distance formula" |
+| Output Issues | 1 | "Incorrect Output Value" |
+
+...
 ```
