@@ -2,14 +2,25 @@
 
 This directory contains comprehensive documentation for the Ensemble Evaluation CLI's misconception detection system.
 
-## Documents
+## Recommended Reading Path
 
-| Document | Description |
-|----------|-------------|
-| [Misconception Detection](misconception-detection.md) | Core system architecture and data flow |
-| [Topic Taxonomy](topic-taxonomy.md) | How topics are classified and normalized |
-| [Filtering & Subcategories](filtering-subcategories.md) | Syntax error filtering and Other category breakdown |
-| [Report Generation](report-generation.md) | How reports are generated and what metrics mean |
+To fully understand the system, we recommend reading the documentation in the following order:
+
+1. **[Misconception Detection System](misconception-detection.md)**
+   *   **Start here** to get a high-level overview of the entire pipeline, from student code to the final report.
+   *   *Key takeaways:* System architecture, data flow, and the role of LLMs.
+
+2. **[Topic Taxonomy](topic-taxonomy.md)**
+   *   **Read this next** to understand how the system organizes misconceptions into the 4 canonical course topics vs. the "Other" category.
+   *   *Key takeaways:* The "pure" topic strategy and how normalization works.
+
+3. **[Filtering & Subcategories](filtering-subcategories.md)**
+   *   **Then dive deeper** into how the system refines the data by removing syntax errors and breaking down the "Other" category.
+   *   *Key takeaways:* Syntax filtering logic and semantic subcategorization.
+
+4. **[Report Generation](report-generation.md)**
+   *   **Finally**, learn how the processed data is synthesized into actionable insights.
+   *   *Key takeaways:* Understanding the metrics, tables, and progression analysis in the final report.
 
 ## Quick Overview
 
