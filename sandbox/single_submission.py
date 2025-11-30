@@ -11,7 +11,6 @@ from sandbox.utils.grading import (
     grade_with_model,
     load_question,
     load_rubric,
-    load_student_submission,
 )
 
 load_dotenv()
@@ -49,15 +48,15 @@ async def grade_single_student():
     # 2. Loop through Questions 1 to 4
     for q_num in range(1, 5):
         console.print(f"\n[bold]Processing Question {q_num}...[/bold]")
-        
+
         question_file = f"data/a2/q{q_num}.md"
         rubric_file = f"data/a2/rubric_q{q_num}.md"
-        
+
         # Load Resources
         try:
             question_text = load_question(question_file)
             rubric_data = load_rubric(rubric_file)
-            
+
             # Load specific student file for this question (e.g., Q1.java)
             # We need to manually construct the path or modify load_student_submission
             # But load_student_submission currently finds *any* .java file.
@@ -65,14 +64,16 @@ async def grade_single_student():
             student_dir = os.path.join(submission_dir, student_id)
             student_file_name = f"Q{q_num}.java"
             student_file_path = os.path.join(student_dir, student_file_name)
-            
+
             if not os.path.exists(student_file_path):
-                 console.print(f"[red]File {student_file_name} not found for student {student_id}. Skipping.[/red]")
-                 continue
-                 
-            with open(student_file_path, "r") as f:
+                console.print(
+                    f"[red]File {student_file_name} not found for student {student_id}. Skipping.[/red]"
+                )
+                continue
+
+            with open(student_file_path) as f:
                 student_code = f.read()
-                
+
         except Exception as e:
             console.print(f"[red]Error loading resources for Q{q_num}: {e}[/red]")
             continue
@@ -109,7 +110,7 @@ async def grade_single_student():
             question_source_path=question_file,
             rubric_source_path=rubric_file,
         )
-        
+
         # Update context with correct question ID
         eval_doc.context.question_id = f"q{q_num}"
         eval_doc.context.question_title = f"Question {q_num}"

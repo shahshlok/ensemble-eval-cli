@@ -8,8 +8,8 @@ This module processes evaluation JSON files from student_evals/ directory and pr
 - Model agreement metrics
 """
 
-import json
 import difflib
+import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -17,14 +17,13 @@ from pathlib import Path
 
 from pydantic_models.evaluation import EvaluationDocument
 
-
 # Canonical topics aligned with course learning objectives (from Assignment 2 rubric)
 # These are the actual topics the assignment was designed to test
 CANONICAL_TOPICS = [
-    "Variables",                         # Declaring, assigning, using in expressions
-    "Data Types",                        # int vs double, type conversions
-    "Constants",                         # Math library (Math.pow, Math.sqrt)
-    "Reading input from the keyboard",   # Scanner usage, prompts
+    "Variables",  # Declaring, assigning, using in expressions
+    "Data Types",  # int vs double, type conversions
+    "Constants",  # Math library (Math.pow, Math.sqrt)
+    "Reading input from the keyboard",  # Scanner usage, prompts
 ]
 
 # Catch-all for misconceptions that don't fit the 4 course topics
@@ -43,7 +42,6 @@ TOPIC_MAPPING: dict[str, str] = {
     "operator precedence": "Variables",
     "operator precedence and usage": "Variables",
     "incorrect operator precedence": "Variables",
-    
     # Data Types mappings (int vs double, type conversions, integer division)
     "data types": "Data Types",
     "variables, data types": "Data Types",
@@ -55,7 +53,6 @@ TOPIC_MAPPING: dict[str, str] = {
     "type conversion": "Data Types",
     "casting": "Data Types",
     "int vs double": "Data Types",
-    
     # Constants mappings (Math library: Math.pow, Math.sqrt, exponentiation)
     "constants": "Constants",
     "variables, constants": "Constants",
@@ -64,7 +61,6 @@ TOPIC_MAPPING: dict[str, str] = {
     "exponentiation in java": "Constants",
     "math.sqrt": "Constants",
     "math.pow": "Constants",
-    
     # Reading input mappings (Scanner usage)
     "reading input from the keyboard": "Reading input from the keyboard",
     "input/output": "Reading input from the keyboard",
@@ -73,7 +69,6 @@ TOPIC_MAPPING: dict[str, str] = {
     "incorrect input handling": "Reading input from the keyboard",
     "resource management / input handling": "Reading input from the keyboard",
     "resource management": "Reading input from the keyboard",
-    
     # Other - catch-all for things that don't fit the 4 course topics
     "formula application": OTHER_TOPIC,
     "incorrect formula application": OTHER_TOPIC,
@@ -100,7 +95,6 @@ TOPIC_MAPPING: dict[str, str] = {
     "error handling and program robustness": OTHER_TOPIC,
     "division by zero handling": OTHER_TOPIC,
     "geometry / coordinate systems": OTHER_TOPIC,
-    
     # Syntax-related -> FILTER OUT (not real misconceptions)
     "syntax": SYNTAX_TOPIC,
     "syntax errors": SYNTAX_TOPIC,
@@ -135,20 +129,20 @@ SYNTAX_ERROR_KEYWORDS = [
 
 def is_syntax_error(misconception_name: str, misconception_description: str) -> bool:
     """Check if a misconception is actually just a syntax error (should be filtered).
-    
+
     Args:
         misconception_name: The name of the misconception.
         misconception_description: The description of the misconception.
-        
+
     Returns:
         True if this is a syntax error that should be filtered out.
     """
     combined = f"{misconception_name} {misconception_description}".lower()
-    
+
     for keyword in SYNTAX_ERROR_KEYWORDS:
         if keyword in combined:
             return True
-    
+
     return False
 
 
@@ -164,10 +158,10 @@ def normalize_topic(topic: str) -> str | None:
     # Check direct match first
     if topic in CANONICAL_TOPICS:
         return topic
-    
+
     if topic == SYNTAX_TOPIC:
         return SYNTAX_TOPIC
-    
+
     if topic == OTHER_TOPIC:
         return OTHER_TOPIC
 
@@ -373,7 +367,9 @@ class MisconceptionAnalyzer:
 
         return len(self.evaluations)
 
-    def extract_misconceptions(self, filter_syntax_errors: bool = True) -> list[MisconceptionRecord]:
+    def extract_misconceptions(
+        self, filter_syntax_errors: bool = True
+    ) -> list[MisconceptionRecord]:
         """Extract all misconceptions from loaded evaluations.
 
         Args:
@@ -394,14 +390,14 @@ class MisconceptionAnalyzer:
                 for misconception in model_eval.misconceptions:
                     # Normalize the topic to one of the canonical topics
                     normalized_topic = normalize_topic(misconception.topic)
-                    
+
                     # Filter out syntax errors if enabled
                     if filter_syntax_errors:
                         # Check if topic is syntax-related
                         if normalized_topic == SYNTAX_TOPIC:
                             filtered_count += 1
                             continue
-                        
+
                         # Check if name/description contains syntax error keywords
                         if is_syntax_error(misconception.name, misconception.description):
                             filtered_count += 1
@@ -441,9 +437,9 @@ class MisconceptionAnalyzer:
         name_counts = defaultdict(int)
         for record in self.misconception_records:
             name_counts[record.name] += 1
-        
+
         sorted_names = sorted(name_counts.keys(), key=lambda x: name_counts[x], reverse=True)
-        
+
         clusters: dict[str, str] = {}
         canonical_names: list[str] = []
 
@@ -451,25 +447,25 @@ class MisconceptionAnalyzer:
             # Try to find a match in existing canonical names
             best_match = None
             best_ratio = 0.0
-            
+
             for canonical in canonical_names:
                 ratio = difflib.SequenceMatcher(None, name.lower(), canonical.lower()).ratio()
                 if ratio > best_ratio:
                     best_ratio = ratio
                     best_match = canonical
-            
+
             if best_match and best_ratio >= threshold:
                 clusters[name] = best_match
             else:
                 # New cluster
                 canonical_names.append(name)
                 clusters[name] = name
-                
+
         return clusters
 
     def get_other_subcategories(self) -> dict[str, list[MisconceptionRecord]]:
         """Group misconceptions in 'Other' category into sub-categories using keyword matching.
-        
+
         Uses a two-pass approach:
         1. First try to match on the misconception NAME only (more reliable)
         2. If no match, try matching on description (less reliable, more specific keywords)
@@ -489,35 +485,62 @@ class MisconceptionAnalyzer:
         # Priority order matters - first match wins
         # Using more specific phrases to avoid false positives
         SUBCATEGORY_RULES = [
-            ("Formula Application", {
-                "name_keywords": ["formula", "distance", "acceleration", "heron", "area", "geometry", "calculation"],
-                "description_keywords": []  # Don't match on description for this category
-            }),
-            ("Problem Understanding", {
-                "name_keywords": ["misinterpret", "misunderstand", "wrong problem", "wrong approach", 
-                                  "different problem", "problem requirement", "problem interpretation",
-                                  "misappl", "disregard", "objective"],
-                "description_keywords": ["solved a different", "wrong problem", "misunderstood the"]
-            }),
-            ("Output Issues", {
-                "name_keywords": ["output", "display", "print"],
-                "description_keywords": []
-            }),
-            ("Algorithm/Logic", {
-                "name_keywords": ["algorithm", "logic error"],
-                "description_keywords": []
-            }),
+            (
+                "Formula Application",
+                {
+                    "name_keywords": [
+                        "formula",
+                        "distance",
+                        "acceleration",
+                        "heron",
+                        "area",
+                        "geometry",
+                        "calculation",
+                    ],
+                    "description_keywords": [],  # Don't match on description for this category
+                },
+            ),
+            (
+                "Problem Understanding",
+                {
+                    "name_keywords": [
+                        "misinterpret",
+                        "misunderstand",
+                        "wrong problem",
+                        "wrong approach",
+                        "different problem",
+                        "problem requirement",
+                        "problem interpretation",
+                        "misappl",
+                        "disregard",
+                        "objective",
+                    ],
+                    "description_keywords": [
+                        "solved a different",
+                        "wrong problem",
+                        "misunderstood the",
+                    ],
+                },
+            ),
+            (
+                "Output Issues",
+                {"name_keywords": ["output", "display", "print"], "description_keywords": []},
+            ),
+            (
+                "Algorithm/Logic",
+                {"name_keywords": ["algorithm", "logic error"], "description_keywords": []},
+            ),
         ]
 
         # Categorize each record
         subcategories: dict[str, list[MisconceptionRecord]] = defaultdict(list)
-        
+
         for record in other_records:
             name_lower = record.name.lower()
             desc_lower = record.description.lower()
-            
+
             matched = False
-            
+
             # First pass: try to match on NAME only
             for subcat, rules in SUBCATEGORY_RULES:
                 for keyword in rules["name_keywords"]:
@@ -527,7 +550,7 @@ class MisconceptionAnalyzer:
                         break
                 if matched:
                     break
-            
+
             # Second pass: if no name match, try description with more specific keywords
             if not matched:
                 for subcat, rules in SUBCATEGORY_RULES:
@@ -538,7 +561,7 @@ class MisconceptionAnalyzer:
                             break
                     if matched:
                         break
-            
+
             # If still no match, put in "Miscellaneous"
             if not matched:
                 subcategories["Miscellaneous"].append(record)
@@ -640,7 +663,7 @@ class MisconceptionAnalyzer:
         for record in self.misconception_records:
             # Use clustered name
             clustered_name = name_mapping.get(record.name, record.name)
-            
+
             key = (record.topic, record.task)
 
             topic_task_data[key]["students"].add(record.student_id)
@@ -879,19 +902,21 @@ class MisconceptionAnalyzer:
             other_total = sum(len(records) for records in other_subcats.values())
             lines.append("### 'Other' Category Breakdown")
             lines.append("")
-            lines.append(f"The 'Other' category contains {other_total} misconceptions that don't fit the 4 course topics.")
+            lines.append(
+                f"The 'Other' category contains {other_total} misconceptions that don't fit the 4 course topics."
+            )
             lines.append("These are grouped by semantic similarity:")
             lines.append("")
             lines.append("| Sub-category | Count | Examples |")
             lines.append("|--------------|-------|----------|")
-            
+
             for subcat, records in sorted(other_subcats.items(), key=lambda x: -len(x[1])):
                 count = len(records)
                 # Get unique misconception names as examples (max 3, no truncation)
                 unique_names = list(set(r.name for r in records))[:3]
                 examples = ", ".join(f'"{n}"' for n in unique_names)
                 lines.append(f"| {subcat} | {count} | {examples} |")
-            
+
             lines.append("")
 
         if class_analysis.misconception_type_stats:

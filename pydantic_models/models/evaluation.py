@@ -45,19 +45,17 @@ Top‑down structure of the final model:
             └─ validated_by: str | None
 """
 
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 # Canonical topics for misconception classification (from Assignment 2 rubric)
 # These are the actual learning objectives the assignment tests
 CANONICAL_TOPICS = [
-    "Variables",                         # Declaring, assigning, using in expressions
-    "Data Types",                        # int vs double, type conversions
-    "Constants",                         # Math library (Math.pow, Math.sqrt)
-    "Reading input from the keyboard",   # Scanner usage, prompts
-    "Other",                             # Catch-all for things that don't fit above
+    "Variables",  # Declaring, assigning, using in expressions
+    "Data Types",  # int vs double, type conversions
+    "Constants",  # Math library (Math.pow, Math.sqrt)
+    "Reading input from the keyboard",  # Scanner usage, prompts
+    "Other",  # Catch-all for things that don't fit above
 ]
 
 

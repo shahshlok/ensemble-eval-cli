@@ -22,7 +22,6 @@ from utils.grading import (
     grade_with_model,
     load_question,
     load_rubric,
-    load_student_submission,
 )
 from utils.misconception_analyzer import MisconceptionAnalyzer
 
@@ -177,7 +176,7 @@ async def process_student_wrapper(
                     )
                     continue
 
-                with open(student_file_path, "r") as f:
+                with open(student_file_path) as f:
                     student_code = f.read()
 
                 # 3. Grade (Slow Network Call)
