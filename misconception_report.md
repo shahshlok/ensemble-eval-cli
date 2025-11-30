@@ -1,6 +1,6 @@
 # Misconception Analysis Report
 
-**Generated:** 2025-11-30 03:58:18
+**Generated:** 2025-11-30 04:02:37
 **Total Students Analyzed:** 25
 **Total Misconceptions Detected:** 49
 
@@ -23,9 +23,9 @@ These are grouped by semantic similarity:
 
 | Sub-category | Count | Examples |
 |--------------|-------|----------|
-| Problem Understanding | 10 | "Wrong approach / Solution not matching p...", "Misinterpretation of Problem Requirement..." |
-| Miscellaneous | 8 | "Incorrect sign in velocity change", "Incorrect problem implementation (fuel-c..." |
-| Formula Application | 5 | "Formula Misapplication", "Solved a different problem (acceleration..." |
+| Problem Understanding | 10 | "Complete misunderstanding of the problem's objective", "Wrong problem understanding (Understand)", "Misapplied problem scope" |
+| Miscellaneous | 8 | "Incorrect problem assignment", "Incorrect squaring operator", "Incorrect data type usage" |
+| Formula Application | 5 | "Formula Misapplication", "Incorrect application of Heron's formula", "Incorrect purpose / wrong formula usage" |
 | Output Issues | 1 | "Incorrect Output Value" |
 
 ### Most Common Misconceptions
@@ -38,7 +38,7 @@ These are grouped by semantic similarity:
 | 4 | Incorrect application of distance formula | Other | 2 | 1 (gemini-2.5-flash-lite) |
 | 5 | Incorrect formula application | Variables | 2 | 1 (gemini-2.5-flash-lite) |
 | 6 | Incorrect use of exponentiation operator | Data Types | 2 | 1 (gemini-2.5-flash-lite) |
-| 7 | Incorrect operator precedence | Variables | 2 | 2 (gpt-5-nano, gemini-2.5-flash-lite) |
+| 7 | Incorrect operator precedence | Variables | 2 | 2 (gemini-2.5-flash-lite, gpt-5-nano) |
 | 8 | Misinterpreting the problem and irrelevant input/output | Other | 1 | 1 (gemini-2.5-flash-lite) |
 | 9 | Wrong data types for velocity/time | Variables | 1 | 1 (gpt-5-nano) |
 | 10 | Inappropriate use of integer data types | Data Types | 1 | 1 (gemini-2.5-flash-lite) |
