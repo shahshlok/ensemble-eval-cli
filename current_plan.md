@@ -12,29 +12,29 @@ This research investigates whether Large Language Models can autonomously identi
 
 ### 1.1 Verified Data Inventory
 
-| Component | Count | Status |
-|-----------|-------|--------|
-| Prompt Strategies | 4 | baseline, minimal, socratic, rubric_only |
-| LLM Models | 2 | gemini-2.5-flash-lite, gpt-5-nano |
-| Students (seeded) | 10 | Representative sample with controlled errors |
-| Questions | 4 | q1-q4 (varying complexity) |
-| Total Submissions | 40 | 10 students x 4 questions |
-| Evaluations per Strategy | 40 | Complete coverage |
-| **Total Evaluation Records** | **160** | 4 strategies x 40 submissions |
-| **Total Model Judgments** | **320** | 160 evals x 2 models |
+| Component                    | Count   | Status                                       |
+| ---------------------------- | ------- | -------------------------------------------- |
+| Prompt Strategies            | 4       | baseline, minimal, socratic, rubric_only     |
+| LLM Models                   | 2       | gemini-2.5-flash-lite, gpt-5-nano            |
+| Students (seeded)            | 10      | Representative sample with controlled errors |
+| Questions                    | 4       | q1-q4 (varying complexity)                   |
+| Total Submissions            | 40      | 10 students x 4 questions                    |
+| Evaluations per Strategy     | 40      | Complete coverage                            |
+| **Total Evaluation Records** | **160** | 4 strategies x 40 submissions                |
+| **Total Model Judgments**    | **320** | 160 evals x 2 models                         |
 
 ### 1.2 Ground Truth Distribution
 
 From `authentic_seeded/manifest.json` (240 entries for 60 students, 10 evaluated):
 
-| Category | Misconception IDs | Count in Manifest |
-|----------|-------------------|-------------------|
-| Data Types | DT001, DT002, DT003 | ~25 |
-| Variables | VAR001, VAR002, VAR003, VAR004 | ~20 |
-| Constants | CONST001, CONST002, CONST003 | ~15 |
-| Input/Scanner | INPUT001, INPUT002, INPUT003 | ~20 |
-| Other | OTHER001, OTHER002 | ~15 |
-| Correct (no error) | null | ~145 |
+| Category           | Misconception IDs              | Count in Manifest |
+| ------------------ | ------------------------------ | ----------------- |
+| Data Types         | DT001, DT002, DT003            | ~25               |
+| Variables          | VAR001, VAR002, VAR003, VAR004 | ~20               |
+| Constants          | CONST001, CONST002, CONST003   | ~15               |
+| Input/Scanner      | INPUT001, INPUT002, INPUT003   | ~20               |
+| Other              | OTHER001, OTHER002             | ~15               |
+| Correct (no error) | null                           | ~145              |
 
 ### 1.3 Misconception Taxonomy
 
@@ -82,15 +82,15 @@ From `authentic_seeded/manifest.json` (240 entries for 60 students, 10 evaluated
 
 ### 3.2 Advanced Analyses
 
-| Analysis | Description | Research Value |
-|----------|-------------|----------------|
-| **Misconception-Specific Detection Rates** | Per-ID recall (e.g., "DT002 detected 100%, INPUT001 detected 0%") | Identifies blind spots |
-| **Severity-Weighted Recall** | Weight recall by misconception severity (high=3, medium=2, low=1) | Practical importance |
-| **Topic-Level Aggregation** | Performance by topic (Data Types vs Variables vs Constants) | Curriculum implications |
-| **Model Agreement (Cohen's Kappa)** | Inter-rater reliability between Gemini and GPT | Ensemble validity |
-| **Confidence Calibration** | Do LLM confidence scores predict accuracy? | Trust/uncertainty |
-| **False Positive Taxonomy** | Categorize FP types (style vs real issue in "correct" code) | Error analysis |
-| **Mapping Accuracy** | When LLM detects error, does description match GT ID? | Semantic precision |
+| Analysis                                   | Description                                                       | Research Value          |
+| ------------------------------------------ | ----------------------------------------------------------------- | ----------------------- |
+| **Misconception-Specific Detection Rates** | Per-ID recall (e.g., "DT002 detected 100%, INPUT001 detected 0%") | Identifies blind spots  |
+| **Severity-Weighted Recall**               | Weight recall by misconception severity (high=3, medium=2, low=1) | Practical importance    |
+| **Topic-Level Aggregation**                | Performance by topic (Data Types vs Variables vs Constants)       | Curriculum implications |
+| **Model Agreement (Cohen's Kappa)**        | Inter-rater reliability between Gemini and GPT                    | Ensemble validity       |
+| **Confidence Calibration**                 | Do LLM confidence scores predict accuracy?                        | Trust/uncertainty       |
+| **False Positive Taxonomy**                | Categorize FP types (style vs real issue in "correct" code)       | Error analysis          |
+| **Mapping Accuracy**                       | When LLM detects error, does description match GT ID?             | Semantic precision      |
 
 ### 3.3 Comparative Analyses
 
@@ -130,15 +130,15 @@ reports/
 
 ### 4.2 Visualizations (for Paper Figures)
 
-| Figure | Type | Shows |
-|--------|------|-------|
-| Fig 1 | Grouped Bar Chart | Precision/Recall/F1 by strategy |
-| Fig 2 | Heatmap | Misconception detection rate by ID x Strategy |
-| Fig 3 | Confusion Matrix Grid | 2x4 grid (2 models x 4 strategies) |
-| Fig 4 | Radar Chart | Topic-level performance comparison |
-| Fig 5 | Scatter Plot | Confidence vs Accuracy calibration |
-| Fig 6 | Venn Diagram | Model agreement overlap |
-| Fig 7 | Waterfall Chart | Error cascade (GT -> Detection -> Mapping) |
+| Figure | Type                  | Shows                                         |
+| ------ | --------------------- | --------------------------------------------- |
+| Fig 1  | Grouped Bar Chart     | Precision/Recall/F1 by strategy               |
+| Fig 2  | Heatmap               | Misconception detection rate by ID x Strategy |
+| Fig 3  | Confusion Matrix Grid | 2x4 grid (2 models x 4 strategies)            |
+| Fig 4  | Radar Chart           | Topic-level performance comparison            |
+| Fig 5  | Scatter Plot          | Confidence vs Accuracy calibration            |
+| Fig 6  | Venn Diagram          | Model agreement overlap                       |
+| Fig 7  | Waterfall Chart       | Error cascade (GT -> Detection -> Mapping)    |
 
 ---
 
@@ -200,22 +200,22 @@ def generate_paper_ready_report(results: dict) -> PaperReport:
 
 ### 6.1 For Research Contribution
 
-| Finding Type | Example | Significance |
-|--------------|---------|--------------|
-| **Strategy Effect** | "Socratic prompting improves recall by 15% over minimal" | Prompt engineering guidance |
-| **Blind Spots** | "All strategies miss INPUT001 (missing import)" | LLM limitation understanding |
-| **Semantic Gap** | "LLMs detect 'integer division' but call it 'truncation'" | Vocabulary mismatch |
-| **Over-Detection** | "Both models flag 'Scanner not closed' as error on correct code" | Calibration needs |
-| **Model Differences** | "Gemini more conservative (higher precision), GPT more aggressive (higher recall)" | Model selection guidance |
+| Finding Type          | Example                                                                            | Significance                 |
+| --------------------- | ---------------------------------------------------------------------------------- | ---------------------------- |
+| **Strategy Effect**   | "Socratic prompting improves recall by 15% over minimal"                           | Prompt engineering guidance  |
+| **Blind Spots**       | "All strategies miss INPUT001 (missing import)"                                    | LLM limitation understanding |
+| **Semantic Gap**      | "LLMs detect 'integer division' but call it 'truncation'"                          | Vocabulary mismatch          |
+| **Over-Detection**    | "Both models flag 'Scanner not closed' as error on correct code"                   | Calibration needs            |
+| **Model Differences** | "Gemini more conservative (higher precision), GPT more aggressive (higher recall)" | Model selection guidance     |
 
 ### 6.2 For Practical Application
 
-| Recommendation | Based On | Impact |
-|----------------|----------|--------|
-| "Use socratic for initial detection, baseline for confirmation" | F1 comparison | Workflow design |
-| "Ensemble voting with 2+ models reduces FP by 40%" | Agreement analysis | Deployment strategy |
-| "Explicitly prompt for INPUT/Scanner issues" | Per-category recall | Prompt improvement |
-| "Treat confidence < 0.7 as uncertain" | Calibration analysis | UI/UX design |
+| Recommendation                                                  | Based On             | Impact              |
+| --------------------------------------------------------------- | -------------------- | ------------------- |
+| "Use socratic for initial detection, baseline for confirmation" | F1 comparison        | Workflow design     |
+| "Ensemble voting with 2+ models reduces FP by 40%"              | Agreement analysis   | Deployment strategy |
+| "Explicitly prompt for INPUT/Scanner issues"                    | Per-category recall  | Prompt improvement  |
+| "Treat confidence < 0.7 as uncertain"                           | Calibration analysis | UI/UX design        |
 
 ---
 
@@ -294,9 +294,9 @@ def generate_paper_ready_report(results: dict) -> PaperReport:
 ### Immediate (This Session)
 - [x] Verify all 160 evaluation files exist
 - [x] Confirm 2 models per evaluation
-- [ ] Create `utils/prompt_evaluator.py`
-- [ ] Run cross-strategy comparison
-- [ ] Generate initial metrics table
+- [x] Create `utils/prompt_evaluator.py`
+- [x] Run cross-strategy comparison
+- [x] Generate initial metrics table
 
 ### Short-Term (Next Session)
 - [ ] Implement statistical tests
