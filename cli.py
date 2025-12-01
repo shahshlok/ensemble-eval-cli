@@ -93,6 +93,33 @@ def create_menu_panel():
     )
 
 
+def create_strategy_panel():
+    """Create the prompt strategy selection panel."""
+    strategy_text = Text()
+    strategy_text.append("Select a prompt strategy:\n\n", style="bold white")
+    strategy_text.append("  [1] ", style="bold green")
+    strategy_text.append("minimal", style="white")
+    strategy_text.append(" - No examples, LLM discovers misconceptions freely\n", style="dim")
+    strategy_text.append("  [2] ", style="bold yellow")
+    strategy_text.append("baseline", style="white")
+    strategy_text.append(" - Lists example misconceptions (control/biased)\n", style="dim")
+    strategy_text.append("  [3] ", style="bold cyan")
+    strategy_text.append("socratic", style="white")
+    strategy_text.append(" - Chain-of-thought reasoning through code\n", style="dim")
+    strategy_text.append("  [4] ", style="bold magenta")
+    strategy_text.append("rubric_only", style="white")
+    strategy_text.append(" - Grade only, no misconception detection\n", style="dim")
+
+    return Panel(
+        strategy_text,
+        box=box.ROUNDED,
+        border_style="green",
+        title="[bold]Prompt Strategy[/bold]",
+        title_align="left",
+        padding=(1, 2),
+    )
+
+
 async def grade_student_with_models(
     student_code: str, question_text: str, rubric_data: dict[str, Any], strategy: str = "minimal"
 ) -> dict[str, Any]:
@@ -217,7 +244,7 @@ async def process_student_wrapper(
                     eval_doc.context.question_id = q_id
                     eval_doc.context.question_title = f"Question {q_num}"
 
-                    output_dir = "student_evals"
+                    output_dir = f"student_evals/{strategy}"
                     os.makedirs(output_dir, exist_ok=True)
                     output_file = f"{output_dir}/{student_id}_{q_id}_eval.json"
                     with open(output_file, "w") as f:
@@ -290,7 +317,7 @@ async def batch_grade_students(students: list[str], strategy: str = "minimal") -
     return results
 
 
-def display_grading_results(results: list[dict]):
+def display_grading_results(results: list[dict], strategy: str = "minimal"):
     """Display grading results in a formatted table."""
     console.print()
     console.rule("[bold]Ensembling Method Evaluation[/bold]")
@@ -382,7 +409,7 @@ def display_grading_results(results: list[dict]):
     console.print(table)
     console.print()
     console.print(
-        f"[dim]Processed {len(results)} students successfully. Logs in student_evals/[/dim]"
+        f"[dim]Processed {len(results)} evaluations. Saved to student_evals/{strategy}/[/dim]"
     )
 
 
@@ -390,7 +417,7 @@ def display_grading_results(results: list[dict]):
 PROMPT_STRATEGIES = ["baseline", "minimal", "socratic", "rubric_only"]
 
 
-def run_grading(strategy: str = "minimal"):
+def run_grading(strategy: str = "minimal", batch_size: int | None = None):
     """Execute the grading workflow.
 
     Args:
@@ -399,6 +426,7 @@ def run_grading(strategy: str = "minimal"):
             - "minimal": No examples, minimal guidance (recommended for research)
             - "socratic": Chain-of-thought reasoning
             - "rubric_only": Grade only, no misconception detection
+        batch_size: Number of students to grade. If None, uses BATCH_LIMIT.
     """
     # Discovery
     all_students = get_student_list()
@@ -412,9 +440,12 @@ def run_grading(strategy: str = "minimal"):
         )
         return
 
-    students_to_grade = all_students[:BATCH_LIMIT]
+    # Determine batch size
+    limit = batch_size if batch_size is not None else BATCH_LIMIT
+    students_to_grade = all_students[:limit]
+
     console.print(
-        f"[bold]Found {len(all_students)} submissions. Processing {len(students_to_grade)}...[/bold]"
+        f"[bold]Processing {len(students_to_grade)} of {len(all_students)} students...[/bold]"
     )
     console.print(f"[dim]Concurrency Limit: {MAX_CONCURRENT_STUDENTS} students at a time[/dim]")
     console.print(f"[cyan]Prompt Strategy: {strategy}[/cyan]")
@@ -424,7 +455,7 @@ def run_grading(strategy: str = "minimal"):
     results = asyncio.run(batch_grade_students(students_to_grade, strategy=strategy))
 
     # Display Results
-    display_grading_results(results)
+    display_grading_results(results, strategy=strategy)
 
 
 def run_misconception_analysis():
@@ -633,39 +664,9 @@ def run_misconception_analysis():
 # --- Main Command ---
 
 
-@app.command()
-def grade(
-    strategy: str = typer.Option(
-        "minimal",
-        "--strategy",
-        "-s",
-        help="Prompt strategy: baseline, minimal, socratic, rubric_only",
-    ),
-):
-    """Run the grading workflow with a specific prompt strategy.
-
-    Strategies:
-    - baseline: Current approach with example misconceptions (control)
-    - minimal: No examples, let LLM discover misconceptions (default)
-    - socratic: Chain-of-thought reasoning through code
-    - rubric_only: Grade only, no misconception detection
-    """
-    if strategy not in PROMPT_STRATEGIES:
-        console.print(f"[red]Invalid strategy: {strategy}[/red]")
-        console.print(f"[dim]Valid options: {', '.join(PROMPT_STRATEGIES)}[/dim]")
-        raise typer.Exit(1)
-    run_grading(strategy=strategy)
-
-
-@app.command()
-def analyze():
-    """Directly run the misconception analysis workflow."""
-    run_misconception_analysis()
-
-
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
-    # If a subcommand was invoked (like 'grade' or 'analyze'), don't run the interactive menu
+    # If a subcommand was invoked, don't run the interactive menu
     if ctx.invoked_subcommand is not None:
         return
 
@@ -690,13 +691,43 @@ def main(ctx: typer.Context):
         console.rule("[bold cyan]Student Grading[/bold cyan]")
         console.print()
 
-        strategy = Prompt.ask(
-            "[bold]Select prompt strategy[/bold]",
-            choices=PROMPT_STRATEGIES,
-            default="minimal",
-        )
+        # Show strategy selection panel
+        console.print(create_strategy_panel())
         console.print()
-        run_grading(strategy=strategy)
+
+        strategy_choice = Prompt.ask(
+            "[bold]Select strategy[/bold]",
+            choices=["1", "2", "3", "4"],
+            default="1",
+        )
+
+        # Map choice to strategy name
+        strategy_map = {
+            "1": "minimal",
+            "2": "baseline",
+            "3": "socratic",
+            "4": "rubric_only",
+        }
+        strategy = strategy_map[strategy_choice]
+
+        console.print()
+
+        # Ask for batch size
+        all_students = get_student_list()
+        console.print(f"[dim]Found {len(all_students)} students in authentic_seeded/[/dim]")
+        batch_size = Prompt.ask(
+            "[bold]How many students to grade?[/bold]",
+            default="5",
+        )
+
+        try:
+            batch_size = int(batch_size)
+            batch_size = min(batch_size, len(all_students))  # Cap at available students
+        except ValueError:
+            batch_size = 5
+
+        console.print()
+        run_grading(strategy=strategy, batch_size=batch_size)
 
     elif choice == "2":
         # Misconception Analysis workflow
