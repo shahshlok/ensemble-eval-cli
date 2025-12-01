@@ -44,7 +44,7 @@ BATCH_LIMIT = 25  # Process 25 students
 # --- Helper Functions ---
 
 
-def get_student_list(submission_dir: str = "student_submissions") -> list[str]:
+def get_student_list(submission_dir: str = "authentic_seeded") -> list[str]:
     if not os.path.exists(submission_dir):
         return []
     return sorted(
@@ -94,12 +94,18 @@ def create_menu_panel():
 
 
 async def grade_student_with_models(
-    student_code: str, question_text: str, rubric_data: dict[str, Any]
+    student_code: str, question_text: str, rubric_data: dict[str, Any], strategy: str = "minimal"
 ) -> dict[str, Any]:
     """
     Grades a single student against ALL models in parallel.
+
+    Args:
+        student_code: The student's code submission
+        question_text: The assignment question
+        rubric_data: The grading rubric
+        strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
     """
-    prompt = construct_prompt(question_text, rubric_data, student_code)
+    prompt = construct_prompt(question_text, rubric_data, student_code, strategy=strategy)
     messages = [{"role": "user", "content": prompt}]
 
     async def grade_with_error_handling(model: str):
@@ -123,10 +129,18 @@ async def process_student_wrapper(
     student_id: str,
     progress: Progress,
     task_id: TaskID,
+    strategy: str = "minimal",
 ) -> list[dict[str, Any]]:
     """
     Worker function that processes one student within the semaphore limit.
     Iterates through Questions 1-4.
+
+    Args:
+        sem: Semaphore for concurrency control
+        student_id: The student's ID
+        progress: Rich progress bar
+        task_id: Task ID for progress tracking
+        strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
     """
     student_name = student_id.replace("_", " ")
     student_results = []
@@ -159,7 +173,7 @@ async def process_student_wrapper(
 
                 # 2. Load submission (Fast I/O)
                 # We need to manually construct the path to find Q{q_num}.java
-                submission_dir = "student_submissions"
+                submission_dir = "authentic_seeded"
                 student_dir = os.path.join(submission_dir, student_id)
                 student_file_name = f"Q{q_num}.java"
                 student_file_path = os.path.join(student_dir, student_file_name)
@@ -181,7 +195,7 @@ async def process_student_wrapper(
 
                 # 3. Grade (Slow Network Call)
                 model_evals = await grade_student_with_models(
-                    student_code, question_text, rubric_data
+                    student_code, question_text, rubric_data, strategy=strategy
                 )
 
                 # 4. Save Results (Fast I/O)
@@ -239,9 +253,13 @@ async def process_student_wrapper(
         return student_results
 
 
-async def batch_grade_students(students: list[str]) -> list[dict]:
+async def batch_grade_students(students: list[str], strategy: str = "minimal") -> list[dict]:
     """
     Orchestrates the parallel grading of multiple students.
+
+    Args:
+        students: List of student IDs to grade
+        strategy: Prompt strategy - "baseline", "minimal", "socratic", "rubric_only"
     """
     sem = asyncio.Semaphore(MAX_CONCURRENT_STUDENTS)
     results = []
@@ -260,7 +278,7 @@ async def batch_grade_students(students: list[str]) -> list[dict]:
         # Create a list of pending coroutines
         tasks = []
         for student_id in students:
-            tasks.append(process_student_wrapper(sem, student_id, progress, overall_task))
+            tasks.append(process_student_wrapper(sem, student_id, progress, overall_task, strategy))
 
         # Fire them all!
         # returns a list of lists of results
@@ -368,14 +386,26 @@ def display_grading_results(results: list[dict]):
     )
 
 
-def run_grading():
-    """Execute the grading workflow."""
+# Available prompt strategies
+PROMPT_STRATEGIES = ["baseline", "minimal", "socratic", "rubric_only"]
+
+
+def run_grading(strategy: str = "minimal"):
+    """Execute the grading workflow.
+
+    Args:
+        strategy: Prompt strategy to use. Options:
+            - "baseline": Current approach with example misconceptions (control)
+            - "minimal": No examples, minimal guidance (recommended for research)
+            - "socratic": Chain-of-thought reasoning
+            - "rubric_only": Grade only, no misconception detection
+    """
     # Discovery
     all_students = get_student_list()
     if not all_students:
         console.print(
             Panel(
-                "[red]No student submissions found in 'student_submissions/'[/red]",
+                "[red]No student submissions found in 'authentic_seeded/'[/red]",
                 title="Error",
                 border_style="red",
             )
@@ -387,13 +417,11 @@ def run_grading():
         f"[bold]Found {len(all_students)} submissions. Processing {len(students_to_grade)}...[/bold]"
     )
     console.print(f"[dim]Concurrency Limit: {MAX_CONCURRENT_STUDENTS} students at a time[/dim]")
+    console.print(f"[cyan]Prompt Strategy: {strategy}[/cyan]")
     console.print()
 
-    # Setup Resources
-    # Resources are now loaded per-question inside the grading loop
-
     # Async Batch Execution
-    results = asyncio.run(batch_grade_students(students_to_grade))
+    results = asyncio.run(batch_grade_students(students_to_grade, strategy=strategy))
 
     # Display Results
     display_grading_results(results)
@@ -606,9 +634,27 @@ def run_misconception_analysis():
 
 
 @app.command()
-def grade():
-    """Directly run the grading workflow."""
-    run_grading()
+def grade(
+    strategy: str = typer.Option(
+        "minimal",
+        "--strategy",
+        "-s",
+        help="Prompt strategy: baseline, minimal, socratic, rubric_only",
+    ),
+):
+    """Run the grading workflow with a specific prompt strategy.
+
+    Strategies:
+    - baseline: Current approach with example misconceptions (control)
+    - minimal: No examples, let LLM discover misconceptions (default)
+    - socratic: Chain-of-thought reasoning through code
+    - rubric_only: Grade only, no misconception detection
+    """
+    if strategy not in PROMPT_STRATEGIES:
+        console.print(f"[red]Invalid strategy: {strategy}[/red]")
+        console.print(f"[dim]Valid options: {', '.join(PROMPT_STRATEGIES)}[/dim]")
+        raise typer.Exit(1)
+    run_grading(strategy=strategy)
 
 
 @app.command()
@@ -640,10 +686,17 @@ def main(ctx: typer.Context):
     console.print()
 
     if choice == "1":
-        # Grading workflow
+        # Grading workflow - ask for strategy
         console.rule("[bold cyan]Student Grading[/bold cyan]")
         console.print()
-        run_grading()
+
+        strategy = Prompt.ask(
+            "[bold]Select prompt strategy[/bold]",
+            choices=PROMPT_STRATEGIES,
+            default="minimal",
+        )
+        console.print()
+        run_grading(strategy=strategy)
 
     elif choice == "2":
         # Misconception Analysis workflow

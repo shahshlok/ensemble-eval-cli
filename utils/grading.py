@@ -117,51 +117,29 @@ def load_student_submission(
     raise FileNotFoundError(f"No .java file found for student {student_id}")
 
 
-def construct_prompt(question_text: str, rubric_data: dict[str, Any], student_code: str) -> str:
-    rubric_str = json.dumps(rubric_data, indent=2)
-    prompt = f"""
-You are an expert grader for a Computer Science assignment.
+def construct_prompt(
+    question_text: str,
+    rubric_data: dict[str, Any],
+    student_code: str,
+    strategy: str = "minimal",
+) -> str:
+    """
+    Construct a grading prompt using the specified strategy.
 
-**Question:**
-{question_text}
+    Args:
+        question_text: The assignment question
+        rubric_data: The rubric dict
+        student_code: Student's code submission
+        strategy: One of "baseline", "minimal", "socratic", "rubric_only"
+                  Default is "minimal" for unbiased misconception detection research
 
-**Rubric:**
-{rubric_str}
+    Returns:
+        The constructed prompt string
+    """
+    from prompts.strategies import PromptStrategy, build_prompt
 
-**Student Submission:**
-```java
-{student_code}
-```
-
-Evaluate the student's submission based on the provided rubric.
-Provide a structured output containing:
-1. Scores for each category in the rubric.
-2. Specific feedback for each category.
-3. Identification of any **misconceptions** (IMPORTANT - read carefully):
-
-   A **misconception** is a fundamental misunderstanding of a concept, NOT a simple typo or syntax error.
-   
-   **REPORT these as misconceptions:**
-   - Using `int` instead of `double` for decimal calculations
-   - Using `^` instead of `Math.pow()` for exponentiation  
-   - Wrong formula (e.g., `(v1 + v0) / t` instead of `(v1 - v0) / t`)
-   - Not understanding integer division (`5/2` gives `2`, not `2.5`)
-   - Incorrect operator precedence
-   - Misinterpreting the problem requirements
-   
-   **DO NOT report these as misconceptions:**
-   - Missing semicolons, brackets, or braces (syntax typo)
-   - Misspelled variable names (typo)
-   - Missing import statements (mechanical)
-   - Formatting or whitespace issues
-   
-   For each misconception, specify:
-   - **Topic**: One of: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
-   - The task name from the rubric where it appears
-
-4. Overall feedback.
-"""
-    return prompt
+    strategy_enum = PromptStrategy(strategy)
+    return build_prompt(strategy_enum, question_text, rubric_data, student_code)
 
 
 async def grade_with_model(model_name: str, messages: list[dict[str, str]]) -> ModelEvaluation:
