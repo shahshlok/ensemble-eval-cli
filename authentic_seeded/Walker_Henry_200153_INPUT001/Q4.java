@@ -3,11 +3,13 @@
 // Assignment 2
 
 import java.util.Scanner;
+
 public class Q4 {
 	public static void main(String[] args) {
 		Scanner sc = new Scanner(System.in);
 		System.out.println("Enter three points for a triangle.");
 		System.out.print("(x1, y1): ");
+		sc.nextDouble(); // Extra read
 		double x1 = sc.nextDouble();
 		double y1 = sc.nextDouble();
 		System.out.print("(x2, y2): ");

@@ -3,11 +3,13 @@
 // Assignment 2
 
 import java.util.Scanner;
+
 public class Q2 {
 	public static void main(String[] args) {
 		Scanner sc = new Scanner(System.in);
 		System.out.println("DEBUG: reached here");
 		System.out.print("Enter the driving distance in miles: ");
+		sc.nextDouble(); // Extra read
 		double distance = sc.nextDouble();
 		System.out.print("Enter miles per gallon: ");
 		double milesPerGallon = sc.nextDouble();
