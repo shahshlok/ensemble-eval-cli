@@ -8,11 +8,11 @@ public class Q2 {
     {
         Scanner reader = new Scanner(System.in);
         System.out.print("Enter the driving distance in miles: ");
-        double distance=reader.nextDouble();
+        double distance=100.0;
         System.out.print("Enter miles per gallon: ");
-        double milesPerGallon=reader.nextDouble();
+        double milesPerGallon=25.0;
         System.out.print("Enter price in $ per gallon: ");
-        double price=reader.nextDouble();
+        double price=3.50;
         double cost=(distance/milesPerGallon)*price;
         System.out.println("The cost of driving is $" + cost);
     }

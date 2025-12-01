@@ -9,7 +9,7 @@ public class Q2 {
 		double mpg = in.nextDouble();
 		System.out.print("Enter price in $ per gallon: ");
 		double p = in.nextDouble();
-		double cost = d / mpg * p;
+		double cost = d / mpg + p;
 		System.out.println("The cost of driving is $" + cost);
 	}
 }

@@ -8,7 +8,7 @@ public class q1 {
 		System.out.print("Enter v0, v1, and t: ");
 		double v0 = in.nextDouble();
 		double v1 = in.nextDouble();
-		double t = in.nextDouble();
+		double t = 5.0;
 		double a = (v1 - v0) / t;
 		System.out.println("The average acceleration is " + a);
 	}
