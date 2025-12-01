@@ -603,11 +603,13 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
     table.add_column("Conf", justify="right", style="blue")
     table.add_column("Flag", justify="center")
 
+    displayed_count = 0
+    
     for res in results:
         student = res["student"]
 
         if res.get("status") in ("error", "skipped"):
-            # Render Error/Skipped Row
+            # Always show errors/skipped items
             table.add_row(
                 student,
                 res.get("question", "-"),
@@ -620,6 +622,7 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
                 "-",
                 "[yellow]S[/yellow]" if res.get("status") == "skipped" else "[red]X[/red]",
             )
+            displayed_count += 1
             continue
 
         # Success Case
@@ -633,14 +636,6 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
         gpt5nano_eval = evals.get("openai/gpt-5-nano")
 
         # Get scores
-        gemini_flash_score = (
-            gemini_flash_eval.scores.total_points_awarded if gemini_flash_eval else 0
-        )
-        gpt51_score = gpt51_eval.scores.total_points_awarded if gpt51_eval else 0
-        gemini_lite_score = gemini_lite_eval.scores.total_points_awarded if gemini_lite_eval else 0
-        gpt5nano_score = gpt5nano_eval.scores.total_points_awarded if gpt5nano_eval else 0
-
-        # Handle missing models for average calc
         valid_scores = []
         for ev in [gemini_flash_eval, gpt51_eval, gemini_lite_eval, gpt5nano_eval]:
             if ev:
@@ -658,26 +653,35 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
         avg_conf = (sum(confs) / len(confs) * 100) if confs else 0
 
         # Flag logic - flag if range is > 1.5 points (significant disagreement)
-        flag = "[green]OK[/green]" if score_range <= 1.5 else "[red]!![/red]"
+        is_flagged = score_range > 1.5
+        flag = "[red]!![/red]" if is_flagged else "[green]OK[/green]"
 
-        table.add_row(
-            student,
-            question,
-            f"{gemini_flash_score:.1f}" if gemini_flash_eval else "-",
-            f"{gpt51_score:.1f}" if gpt51_eval else "-",
-            f"{gemini_lite_score:.1f}" if gemini_lite_eval else "-",
-            f"{gpt5nano_score:.1f}" if gpt5nano_eval else "-",
-            f"{avg_score:.1f}",
-            f"{score_range:.1f}",
-            f"{avg_conf:.0f}%",
-            flag,
-        )
+        # Filter: Only show if flagged or error (already handled above)
+        if is_flagged:
+            table.add_row(
+                student,
+                question,
+                f"{gemini_flash_eval.scores.total_points_awarded:.1f}" if gemini_flash_eval else "-",
+                f"{gpt51_eval.scores.total_points_awarded:.1f}" if gpt51_eval else "-",
+                f"{gemini_lite_eval.scores.total_points_awarded:.1f}" if gemini_lite_eval else "-",
+                f"{gpt5nano_eval.scores.total_points_awarded:.1f}" if gpt5nano_eval else "-",
+                f"{avg_score:.1f}",
+                f"{score_range:.1f}",
+                f"{avg_conf:.0f}%",
+                flag,
+            )
+            displayed_count += 1
 
-    console.print(table)
+    if displayed_count > 0:
+        console.print(table)
+    else:
+        console.print("[green]No significant disagreements or errors found![/green]")
+        
     console.print()
     console.print(
-        f"[dim]Processed {len(results)} evaluations. Saved to student_evals/{strategy}/[/dim]"
+        f"[dim]Processed {len(results)} evaluations. Showing {displayed_count} flagged/error items.[/dim]"
     )
+    console.print(f"[dim]Full results saved to student_evals/{strategy}/[/dim]")
 
 
 # Available prompt strategies
