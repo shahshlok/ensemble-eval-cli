@@ -432,7 +432,9 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
 PROMPT_STRATEGIES = ["baseline", "minimal", "socratic", "rubric_only"]
 
 
-def run_grading(strategy: str = "minimal", batch_size: int | None = None):
+def run_grading(
+    strategy: str = "minimal", students: list[str] | None = None, batch_size: int | None = None
+):
     """Execute the grading workflow.
 
     Args:
