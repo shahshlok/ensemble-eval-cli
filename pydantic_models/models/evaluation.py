@@ -45,6 +45,7 @@ Top‑down structure of the final model:
             └─ validated_by: str | None
 """
 
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -159,11 +160,30 @@ class Evidence(BaseModel):
     )
 
 
+class MisconceptionSeverity(str, Enum):
+    """Severity level of a misconception."""
+
+    CRITICAL = "critical"  # Fundamentally breaks the solution
+    MAJOR = "major"  # Significant impact on correctness
+    MINOR = "minor"  # Small issue, partial understanding
+    SURFACE = "surface"  # Superficial, may self-correct
+
+
+class MisconceptionCategory(str, Enum):
+    """Category of misconception by nature."""
+
+    CONCEPTUAL = "conceptual"  # Flawed mental model of how something works
+    PROCEDURAL = "procedural"  # Wrong steps/algorithm, right concept
+    SYNTACTIC = "syntactic"  # Language-specific syntax confusion (not typos)
+    SEMANTIC = "semantic"  # Misunderstanding what code does vs intended
+
+
 class Misconception(BaseModel):
     """Identified misconception in student's work."""
 
     model_config = ConfigDict(extra="forbid")
 
+    # === Core identification ===
     topic: str = Field(
         ...,
         description="The topic or concept associated with this misconception. Should be one of: Variables, Data Types, Constants, Reading input from the keyboard, or Other (if doesn't fit). Do NOT report syntax errors (missing semicolons, typos) as misconceptions.",
@@ -171,21 +191,79 @@ class Misconception(BaseModel):
     task: str = Field(
         ..., description="The task name from the rubric category where this misconception appears"
     )
-    name: str = Field(..., description="Human-readable label for this misconception")
+    name: str = Field(
+        ...,
+        description="Human-readable label for this misconception (e.g., 'Integer division truncation')",
+    )
     description: str = Field(
         ..., description="Description of what behavior/understanding this misconception reflects"
     )
+
+    # === Classification ===
+    severity: MisconceptionSeverity = Field(
+        default=MisconceptionSeverity.MAJOR,
+        description="How severe is this misconception? critical=breaks solution, major=significant impact, minor=partial understanding, surface=likely self-correcting",
+    )
+    category: MisconceptionCategory = Field(
+        default=MisconceptionCategory.CONCEPTUAL,
+        description="Type of misconception: conceptual=flawed mental model, procedural=wrong algorithm, syntactic=language confusion, semantic=misunderstanding code behavior",
+    )
+
+    # === Student's mental model ===
+    student_belief: str = Field(
+        default="",
+        description="What does the student appear to believe? State it from their perspective. E.g., 'The student believes that ^ is the exponentiation operator in Java'",
+    )
+    correct_understanding: str = Field(
+        default="",
+        description="What is the correct understanding? E.g., 'In Java, ^ is the XOR operator. Use Math.pow(base, exponent) for exponentiation.'",
+    )
+
+    # === Impact analysis ===
+    symptoms: list[str] = Field(
+        default_factory=list,
+        description="Observable symptoms in the code/output. E.g., ['Result is always 0 or 1', 'Output doesn't match expected values']",
+    )
+    root_cause: str = Field(
+        default="",
+        description="The underlying reason for this misconception. E.g., 'Confusion from mathematical notation where ^ means power'",
+    )
+
+    # === Remediation ===
+    remediation_hint: str = Field(
+        default="",
+        description="A hint for how the student could fix this. E.g., 'Replace x^2 with Math.pow(x, 2) or x*x'",
+    )
+    related_concepts: list[str] = Field(
+        default_factory=list,
+        description="Related concepts the student should review. E.g., ['Java Math library', 'Operator precedence', 'Type casting']",
+    )
+
+    # === Confidence & evidence ===
     confidence: float = Field(
         ...,
         ge=0.0,
         le=1.0,
         description="Model's confidence (0-1) that this misconception truly applies",
     )
+    confidence_rationale: str = Field(
+        default="",
+        description="Why this confidence level? E.g., 'High confidence because the pattern x^2 appears multiple times consistently'",
+    )
 
     # Check the Evidence Pydantic Model
     evidence: list[Evidence] = Field(
         ...,
         description="Evidence showing exactly where this misconception appears in the submission",
+    )
+
+    # === Validation ===
+    is_recurring: bool = Field(
+        default=False,
+        description="Does this misconception appear multiple times in the submission?",
+    )
+    affects_output: bool = Field(
+        default=True, description="Does this misconception affect the program output/correctness?"
     )
     validated_by: str | None = Field(
         None, description="Optional human rater ID when a TA confirms this annotation"

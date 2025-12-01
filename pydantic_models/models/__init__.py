@@ -7,6 +7,8 @@ from .evaluation import (
     Feedback,
     LLMEvaluationResponse,
     Misconception,
+    MisconceptionCategory,
+    MisconceptionSeverity,
     ModelEvaluation,
     Scores,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "Feedback",
     "LLMEvaluationResponse",
     "Misconception",
+    "MisconceptionCategory",
+    "MisconceptionSeverity",
     "ModelEvaluation",
     "Scores",
 ]

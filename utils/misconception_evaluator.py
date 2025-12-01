@@ -37,6 +37,20 @@ class DetectedMisconception:
     confidence: float
     mapped_id: str | None = None  # Mapped to ground truth ID after analysis
 
+    # New enhanced fields
+    severity: str = "major"
+    category: str = "conceptual"
+    student_belief: str = ""
+    correct_understanding: str = ""
+    symptoms: list[str] = field(default_factory=list)
+    root_cause: str = ""
+    remediation_hint: str = ""
+    related_concepts: list[str] = field(default_factory=list)
+    confidence_rationale: str = ""
+    is_recurring: bool = False
+    affects_output: bool = True
+    evidence_snippets: list[str] = field(default_factory=list)
+
 
 @dataclass
 class ComparisonResult:
@@ -286,6 +300,12 @@ class MisconceptionEvaluator:
 
             if model_eval.misconceptions:
                 for misc in model_eval.misconceptions:
+                    # Extract evidence snippets
+                    evidence_snippets = []
+                    if misc.evidence:
+                        for ev in misc.evidence:
+                            evidence_snippets.append(ev.snippet)
+
                     detected = DetectedMisconception(
                         student_id=base_student_id,
                         question_id=question_id,
@@ -294,6 +314,19 @@ class MisconceptionEvaluator:
                         name=misc.name,
                         description=misc.description,
                         confidence=misc.confidence,
+                        # New enhanced fields - use getattr with defaults for backward compatibility
+                        severity=getattr(misc, "severity", "major"),
+                        category=getattr(misc, "category", "conceptual"),
+                        student_belief=getattr(misc, "student_belief", ""),
+                        correct_understanding=getattr(misc, "correct_understanding", ""),
+                        symptoms=getattr(misc, "symptoms", []),
+                        root_cause=getattr(misc, "root_cause", ""),
+                        remediation_hint=getattr(misc, "remediation_hint", ""),
+                        related_concepts=getattr(misc, "related_concepts", []),
+                        confidence_rationale=getattr(misc, "confidence_rationale", ""),
+                        is_recurring=getattr(misc, "is_recurring", False),
+                        affects_output=getattr(misc, "affects_output", True),
+                        evidence_snippets=evidence_snippets,
                     )
                     # Try to map to ground truth ID
                     detected.mapped_id = self.map_misconception_to_id(detected)
@@ -472,7 +505,7 @@ class MisconceptionEvaluator:
         return metrics
 
     def generate_report(self) -> str:
-        """Generate a markdown report of the evaluation results."""
+        """Generate a detailed markdown report of the evaluation results."""
         metrics = self.run_comparison()
 
         lines = [
@@ -480,27 +513,43 @@ class MisconceptionEvaluator:
             "",
             f"**Strategy:** {self.strategy}",
             f"**Total Submissions:** {metrics.total_submissions}",
+            f"**Ground Truth with Errors:** {metrics.gt_with_errors}",
+            f"**Ground Truth Correct:** {metrics.gt_correct}",
             "",
-            "## Overall Metrics",
+            "---",
             "",
-            "| Metric | Value |",
-            "|--------|-------|",
-            f"| Precision | {metrics.precision:.1%} |",
-            f"| Recall | {metrics.recall:.1%} |",
-            f"| F1 Score | {metrics.f1_score:.1%} |",
-            f"| Accuracy | {metrics.accuracy:.1%} |",
+            "## Executive Summary",
+            "",
+            "| Metric | Value | Interpretation |",
+            "|--------|-------|----------------|",
+            f"| **Precision** | {metrics.precision:.1%} | When we flag an error, we're right {metrics.precision:.0%} of the time |",
+            f"| **Recall** | {metrics.recall:.1%} | We catch {metrics.recall:.0%} of actual errors |",
+            f"| **F1 Score** | {metrics.f1_score:.1%} | Harmonic mean of precision and recall |",
+            f"| **Accuracy** | {metrics.accuracy:.1%} | Overall correctness rate |",
             "",
             "## Confusion Matrix",
             "",
-            "| | Predicted Error | Predicted Correct |",
-            "|---|---|---|",
-            f"| **Actual Error** | TP: {metrics.true_positives} | FN: {metrics.false_negatives} |",
-            f"| **Actual Correct** | FP: {metrics.false_positives} | TN: {metrics.true_negatives} |",
+            "```",
+            "                    PREDICTED",
+            "                 Error    Correct",
+            "            ┌─────────┬─────────┐",
+            f"    Error   │ TP: {metrics.true_positives:>3} │ FN: {metrics.false_negatives:>3} │",
+            "  A         ├─────────┼─────────┤",
+            f"  C Correct │ FP: {metrics.false_positives:>3} │ TN: {metrics.true_negatives:>3} │",
+            "  T         └─────────┴─────────┘",
+            "```",
+            "",
+            "- **TP (True Positive):** Correctly identified an error",
+            "- **FN (False Negative):** Missed an actual error",
+            "- **FP (False Positive):** Flagged error when code was correct",
+            "- **TN (True Negative):** Correctly identified correct code",
+            "",
+            "---",
             "",
             "## Per-Model Performance",
             "",
             "| Model | TP | FP | FN | TN | Precision | Recall | F1 |",
-            "|-------|----|----|----|----|-----------|--------|-----|",
+            "|-------|:--:|:--:|:--:|:--:|:---------:|:------:|:---:|",
         ]
 
         for model_name, m in metrics.model_metrics.items():
@@ -513,54 +562,166 @@ class MisconceptionEvaluator:
         lines.extend(
             [
                 "",
+                "---",
+                "",
                 "## Per-Misconception Detection Rate",
                 "",
-                "| Misconception ID | Total | Detected | Rate |",
-                "|------------------|-------|----------|------|",
+                "| ID | Name | Total | Detected | Rate | Status |",
+                "|:---|:-----|:-----:|:--------:|:----:|:------:|",
             ]
         )
 
-        for gt_id, data in sorted(metrics.misconception_detection_rate.items()):
-            lines.append(f"| {gt_id} | {data['total']} | {data['detected']} | {data['rate']:.1%} |")
+        # Load misconception catalog for names
+        catalog_names = self._load_catalog_names()
 
-        # Add detailed results
+        for gt_id, data in sorted(metrics.misconception_detection_rate.items()):
+            name = catalog_names.get(gt_id, "Unknown")
+            rate = data["rate"]
+            status = "✓" if rate >= 0.5 else "✗" if rate == 0 else "~"
+            lines.append(
+                f"| {gt_id} | {name[:30]} | {data['total']} | {data['detected']} | {rate:.0%} | {status} |"
+            )
+
+        # Detailed Results Section
         lines.extend(
             [
                 "",
-                "## Detailed Results",
+                "---",
+                "",
+                "## Detailed Results by Submission",
                 "",
             ]
         )
 
-        for result in self.comparison_results:
-            status = ""
-            if result.true_positive:
-                status = "TP"
-            elif result.false_positive:
-                status = "FP"
-            elif result.false_negative:
-                status = "FN"
-            elif result.true_negative:
-                status = "TN"
+        # Group by status for better organization
+        tp_results = [r for r in self.comparison_results if r.true_positive]
+        fp_results = [r for r in self.comparison_results if r.false_positive]
+        fn_results = [r for r in self.comparison_results if r.false_negative]
+        tn_results = [r for r in self.comparison_results if r.true_negative]
 
-            lines.append(f"### {result.student_id} - {result.question_id} [{status}]")
-            lines.append("")
-            lines.append(f"**Ground Truth:** {result.ground_truth_id or 'Correct'}")
+        if tp_results:
+            lines.extend(["### True Positives (Correctly Detected Errors)", ""])
+            for result in tp_results:
+                lines.extend(self._format_detailed_result(result, catalog_names))
 
-            for model_name, detections in result.detected_by_models.items():
-                short_name = model_name.split("/")[-1]
-                if detections:
-                    for d in detections:
-                        mapped = f" -> {d.mapped_id}" if d.mapped_id else ""
-                        lines.append(
-                            f"- **{short_name}:** {d.name}{mapped} (conf: {d.confidence:.2f})"
-                        )
-                else:
-                    lines.append(f"- **{short_name}:** No misconceptions detected")
+        if fn_results:
+            lines.extend(["### False Negatives (Missed Errors)", ""])
+            for result in fn_results:
+                lines.extend(self._format_detailed_result(result, catalog_names))
 
-            lines.append("")
+        if fp_results:
+            lines.extend(["### False Positives (Incorrect Detections)", ""])
+            for result in fp_results:
+                lines.extend(self._format_detailed_result(result, catalog_names))
+
+        # Skip TN details to keep report manageable, but add summary
+        if tn_results:
+            lines.extend(
+                [
+                    "### True Negatives (Correctly Identified as Correct)",
+                    "",
+                    f"*{len(tn_results)} submissions correctly identified as having no misconceptions.*",
+                    "",
+                    "<details>",
+                    "<summary>Click to expand list</summary>",
+                    "",
+                ]
+            )
+            for result in tn_results:
+                lines.append(f"- {result.student_id} - {result.question_id}")
+            lines.extend(["", "</details>", ""])
 
         return "\n".join(lines)
+
+    def _load_catalog_names(self) -> dict[str, str]:
+        """Load misconception names from catalog."""
+        try:
+            with open("data/misconception_catalog.json") as f:
+                catalog = json.load(f)
+                return {m["id"]: m["name"] for m in catalog.get("misconceptions", [])}
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _format_detailed_result(
+        self, result: ComparisonResult, catalog_names: dict[str, str]
+    ) -> list[str]:
+        """Format a single result with full details."""
+        lines = []
+
+        # Header
+        gt_name = catalog_names.get(result.ground_truth_id, "") if result.ground_truth_id else ""
+        gt_display = f"{result.ground_truth_id}" + (f" ({gt_name})" if gt_name else "")
+
+        lines.append(f"#### {result.student_id} - {result.question_id}")
+        lines.append("")
+        lines.append(f"**Ground Truth:** {gt_display or 'Correct (no error)'}")
+        lines.append("")
+
+        # Model detections
+        for model_name, detections in result.detected_by_models.items():
+            short_name = model_name.split("/")[-1]
+
+            if not detections:
+                lines.append(f"**{short_name}:** No misconceptions detected")
+                lines.append("")
+                continue
+
+            lines.append(f"**{short_name}:**")
+            lines.append("")
+
+            for d in detections:
+                mapped_str = f" → **{d.mapped_id}**" if d.mapped_id else ""
+                severity_str = (
+                    str(d.severity).replace("MisconceptionSeverity.", "").lower()
+                    if d.severity
+                    else "major"
+                )
+                category_str = (
+                    str(d.category).replace("MisconceptionCategory.", "").lower()
+                    if d.category
+                    else "conceptual"
+                )
+
+                lines.append(f"- **{d.name}**{mapped_str}")
+                lines.append(
+                    f"  - *Topic:* {d.topic} | *Severity:* {severity_str} | *Category:* {category_str}"
+                )
+                lines.append(f"  - *Confidence:* {d.confidence:.0%}")
+
+                if d.description:
+                    lines.append(f"  - *Description:* {d.description}")
+
+                if d.student_belief:
+                    lines.append(f"  - *Student believes:* {d.student_belief}")
+
+                if d.correct_understanding:
+                    lines.append(f"  - *Correct understanding:* {d.correct_understanding}")
+
+                if d.symptoms:
+                    lines.append(f"  - *Symptoms:* {', '.join(d.symptoms)}")
+
+                if d.root_cause:
+                    lines.append(f"  - *Root cause:* {d.root_cause}")
+
+                if d.remediation_hint:
+                    lines.append(f"  - *Remediation:* {d.remediation_hint}")
+
+                if d.related_concepts:
+                    lines.append(f"  - *Related concepts:* {', '.join(d.related_concepts)}")
+
+                if d.evidence_snippets:
+                    lines.append(f"  - *Evidence:*")
+                    for snippet in d.evidence_snippets[:2]:  # Limit to 2 snippets
+                        # Clean up snippet for display
+                        clean_snippet = snippet.strip().replace("\n", " ")[:100]
+                        lines.append(f"    - `{clean_snippet}`")
+
+                lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        return lines
 
 
 def main():

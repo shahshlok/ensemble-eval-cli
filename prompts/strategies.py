@@ -108,10 +108,30 @@ You are evaluating a CS1 student's Java submission.
    - Forgetting something mechanical (like closing a resource)
    - Style preferences
    
-   For each misunderstanding you find:
-   - Describe what the student appears to believe
-   - Quote the specific code that demonstrates this
-   - Categorize by topic: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
+   For each misunderstanding you find, provide:
+   
+   **Required:**
+   - `name`: Short label (e.g., "Integer division truncation")
+   - `description`: What behavior this misconception reflects
+   - `topic`: One of "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
+   - `student_belief`: What does the student appear to believe? State from their perspective.
+   - `correct_understanding`: What is the correct understanding?
+   - `confidence`: How confident are you this is a real misconception? (0.0-1.0)
+   - `evidence`: Quote the specific code that demonstrates this
+   
+   **Classification:**
+   - `severity`: How bad is this? (critical/major/minor/surface)
+   - `category`: What type? (conceptual/procedural/syntactic/semantic)
+   
+   **Analysis:**
+   - `symptoms`: Observable problems in the code/output (list)
+   - `root_cause`: Why might the student have this misconception?
+   - `affects_output`: Does this change the program's output? (true/false)
+   - `is_recurring`: Does this pattern appear multiple times? (true/false)
+   
+   **Remediation:**
+   - `remediation_hint`: How could the student fix this?
+   - `related_concepts`: What should they review? (list)
 
 3. **Provide overall feedback** (strengths and areas for improvement)
 """.strip()
