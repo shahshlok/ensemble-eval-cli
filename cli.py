@@ -32,7 +32,7 @@ console = Console()
 
 # --- Configuration ---
 # Reduce this if you hit rate limits (429 errors), increase if your tier allows.
-MAX_CONCURRENT_STUDENTS = 10
+MAX_CONCURRENT_STUDENTS = 25
 MODELS = ["google/gemini-2.5-flash-preview-09-2025", "openai/gpt-5.1"]
 MODEL_SHORT_NAMES = {
     "google/gemini-2.5-flash-preview-09-2025": "2.5-Flash",

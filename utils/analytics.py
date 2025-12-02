@@ -3,9 +3,11 @@ Statistical Analytics Engine for LLM Misconception Detection Evaluation.
 
 Provides rigorous statistical comparison of prompt strategies with:
 - Cochran's Q Test for omnibus comparisons
-- McNemar's Test for pairwise comparisons
+- McNemar's Test for pairwise comparisons (strategies AND models)
 - Cohen's Kappa and Krippendorff's Alpha for inter-rater agreement
 - Per-misconception detection analysis
+- Per-model comparison (GPT-5.1 vs Gemini 2.5 Flash)
+- Integrated visualization generation
 """
 
 import json
@@ -17,6 +19,29 @@ from typing import Any
 
 import numpy as np
 from scipy import stats
+
+# Visualization imports (optional - gracefully degrade if not available)
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    HAS_PLOTTING = True
+except ImportError:
+    HAS_PLOTTING = False
+
+# Model configuration for GPT-5.1 and Gemini 2.5 Flash
+MODEL_CONFIG = {
+    "openai/gpt-5.1": {
+        "short_name": "GPT-5.1",
+        "color": "#10a37f",  # OpenAI green
+        "display_order": 1,
+    },
+    "google/gemini-2.5-flash-preview-09-2025": {
+        "short_name": "Gemini-2.5-Flash",
+        "color": "#4285f4",  # Google blue
+        "display_order": 2,
+    },
+}
 
 
 @dataclass
@@ -412,6 +437,183 @@ class AnalyticsEngine:
                 return f"Under-detected ({pct:.0f}% missed)"
             return f"Slightly under ({pct:.0f}% missed)"
 
+    def get_model_binary_outcomes(self, model: str, strategy: str) -> dict[tuple[str, str], int]:
+        """
+        Get binary detection outcomes for a specific model on a strategy.
+        Returns dict of (student_id, question_id) -> 1 if correct detection, 0 otherwise.
+        """
+        outcomes = {}
+
+        for pred in self.predictions[strategy]:
+            if pred.model != model:
+                continue
+
+            key = (pred.student_id, pred.question_id)
+            gt = self.ground_truth.get(key)
+            if not gt:
+                continue
+
+            # Correct if: (error exists and detected) or (no error and not detected)
+            correct = (not gt.is_correct and pred.has_misconception) or (
+                gt.is_correct and not pred.has_misconception
+            )
+            outcomes[key] = 1 if correct else 0
+
+        return outcomes
+
+    def get_per_model_misconception_rates(self) -> dict[str, dict[str, dict[str, Any]]]:
+        """
+        Compute per-misconception detection rates broken down by model.
+        Returns: model -> misconception_id -> {total, detected, rate}
+        """
+        rates: dict[str, dict[str, dict[str, Any]]] = {}
+
+        # Get all models
+        models = set()
+        for strategy in self.STRATEGIES:
+            for pred in self.predictions[strategy]:
+                models.add(pred.model)
+
+        for model in models:
+            rates[model] = {}
+            total_by_misc: dict[str, int] = defaultdict(int)
+            detected_by_misc: dict[str, float] = defaultdict(float)
+
+            # Aggregate across all strategies for this model
+            seen_submissions: dict[str, set[tuple[str, str]]] = defaultdict(set)
+
+            for strategy in self.STRATEGIES:
+                for pred in self.predictions[strategy]:
+                    if pred.model != model:
+                        continue
+
+                    key = (pred.student_id, pred.question_id)
+                    gt = self.ground_truth.get(key)
+                    if not gt or gt.is_correct or not gt.misconception_id:
+                        continue
+
+                    misc_id = gt.misconception_id
+
+                    # Only count each submission once per misconception
+                    if key not in seen_submissions[misc_id]:
+                        seen_submissions[misc_id].add(key)
+                        total_by_misc[misc_id] += 1
+
+                        # Check detection
+                        if misc_id in pred.detected_ids:
+                            detected_by_misc[misc_id] += 1
+                        elif pred.has_misconception:
+                            detected_by_misc[misc_id] += 0.5  # Partial credit
+
+            for misc_id, total in total_by_misc.items():
+                detected = detected_by_misc.get(misc_id, 0)
+                rates[model][misc_id] = {
+                    "total": total,
+                    "detected": detected,
+                    "rate": detected / total if total > 0 else 0.0,
+                }
+
+        return rates
+
+    def get_per_question_metrics(self) -> dict[str, dict[str, dict[str, Any]]]:
+        """
+        Compute metrics broken down by question.
+        Returns: question_id -> strategy -> metrics
+        """
+        results: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+
+        for strategy in self.STRATEGIES:
+            by_question: dict[str, dict[str, int]] = defaultdict(
+                lambda: {"tp": 0, "fp": 0, "fn": 0, "tn": 0}
+            )
+
+            pred_by_submission: dict[tuple[str, str], list[PredictionRecord]] = defaultdict(list)
+            for pred in self.predictions[strategy]:
+                pred_by_submission[(pred.student_id, pred.question_id)].append(pred)
+
+            for (student_id, question_id), preds in pred_by_submission.items():
+                gt = self.ground_truth.get((student_id, question_id))
+                if not gt:
+                    continue
+
+                any_detected = any(p.has_misconception for p in preds)
+
+                if gt.is_correct:
+                    if any_detected:
+                        by_question[question_id]["fp"] += 1
+                    else:
+                        by_question[question_id]["tn"] += 1
+                else:
+                    if any_detected:
+                        by_question[question_id]["tp"] += 1
+                    else:
+                        by_question[question_id]["fn"] += 1
+
+            for qid, counts in by_question.items():
+                tp, fp, fn, tn = counts["tp"], counts["fp"], counts["fn"], counts["tn"]
+                precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+                accuracy = (tp + tn) / (tp + fp + fn + tn) if (tp + fp + fn + tn) > 0 else 0
+
+                results[qid][strategy] = {
+                    "tp": tp,
+                    "fp": fp,
+                    "fn": fn,
+                    "tn": tn,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1,
+                    "accuracy": accuracy,
+                }
+
+        return dict(results)
+
+    def get_model_comparison_summary(self) -> dict[str, Any]:
+        """
+        Generate a head-to-head comparison summary between models.
+        Returns detailed comparison metrics.
+        """
+        models = list(MODEL_CONFIG.keys())
+        if len(models) < 2:
+            return {"error": "Need at least 2 models for comparison"}
+
+        model_metrics = self.compute_per_model_metrics()
+        comparison = {
+            "models": {},
+            "head_to_head": {},
+            "agreement": {},
+        }
+
+        # Per-model aggregate metrics
+        for model in models:
+            if model not in model_metrics:
+                continue
+            short_name = MODEL_CONFIG.get(model, {}).get("short_name", model.split("/")[-1])
+
+            # Average across strategies
+            strategies_data = model_metrics[model]
+            avg_precision = np.mean([m.precision for m in strategies_data.values()])
+            avg_recall = np.mean([m.recall for m in strategies_data.values()])
+            avg_f1 = np.mean([m.f1 for m in strategies_data.values()])
+
+            comparison["models"][short_name] = {
+                "full_name": model,
+                "avg_precision": round(avg_precision, 4),
+                "avg_recall": round(avg_recall, 4),
+                "avg_f1": round(avg_f1, 4),
+                "by_strategy": {
+                    s: {
+                        "precision": round(m.precision, 4),
+                        "recall": round(m.recall, 4),
+                        "f1": round(m.f1, 4),
+                    }
+                    for s, m in strategies_data.items()
+                },
+            }
+
+        return comparison
+
 
 class StatisticalTester:
     """
@@ -559,6 +761,129 @@ class StatisticalTester:
             results.append(result)
 
         return results
+
+    def mcnemar_models(self, model1: str, model2: str, strategy: str) -> dict[str, Any]:
+        """
+        Perform McNemar's test for pairwise MODEL comparison on a given strategy.
+        Tests if the disagreement between two models is symmetric.
+        """
+        outcomes1 = self.engine.get_model_binary_outcomes(model1, strategy)
+        outcomes2 = self.engine.get_model_binary_outcomes(model2, strategy)
+
+        common_keys = set(outcomes1.keys()) & set(outcomes2.keys())
+
+        if len(common_keys) < 10:
+            return {
+                "test": "McNemar (Models)",
+                "models": (model1, model2),
+                "strategy": strategy,
+                "error": "Insufficient common samples",
+            }
+
+        # Build contingency: b = m1 correct & m2 wrong, c = m1 wrong & m2 correct
+        b = sum(1 for k in common_keys if outcomes1[k] == 1 and outcomes2[k] == 0)
+        c = sum(1 for k in common_keys if outcomes1[k] == 0 and outcomes2[k] == 1)
+
+        if b + c == 0:
+            return {
+                "test": "McNemar (Models)",
+                "models": (model1, model2),
+                "strategy": strategy,
+                "b": b,
+                "c": c,
+                "statistic": 0,
+                "p_value": 1.0,
+                "error": "No discordant pairs",
+            }
+
+        chi2 = (abs(b - c) - 1) ** 2 / (b + c)
+        p_value = 1 - stats.chi2.cdf(chi2, 1)
+
+        short1 = MODEL_CONFIG.get(model1, {}).get("short_name", model1.split("/")[-1])
+        short2 = MODEL_CONFIG.get(model2, {}).get("short_name", model2.split("/")[-1])
+
+        return {
+            "test": "McNemar (Models)",
+            "models": (model1, model2),
+            "model_names": (short1, short2),
+            "strategy": strategy,
+            "b": b,
+            "c": c,
+            "statistic": round(chi2, 4),
+            "p_value": round(p_value, 6),
+            "significant": p_value < 0.05,
+            "winner": short1 if b > c else short2 if c > b else "tie",
+            "winner_full": model1 if b > c else model2 if c > b else "tie",
+        }
+
+    def mcnemar_all_model_pairs(self, alpha: float = 0.05) -> dict[str, list[dict[str, Any]]]:
+        """
+        Perform McNemar's test for all model pairs across all strategies.
+        Returns: strategy -> list of pairwise results
+        """
+        # Get all models
+        models = set()
+        for strategy in self.engine.STRATEGIES:
+            for pred in self.engine.predictions[strategy]:
+                models.add(pred.model)
+
+        models = sorted(models)
+        pairs = list(combinations(models, 2))
+        n_tests = len(pairs) * len(self.engine.STRATEGIES)
+        corrected_alpha = alpha / n_tests if n_tests > 0 else alpha
+
+        results_by_strategy = {}
+
+        for strategy in self.engine.STRATEGIES:
+            results = []
+            for m1, m2 in pairs:
+                result = self.mcnemar_models(m1, m2, strategy)
+                result["bonferroni_alpha"] = round(corrected_alpha, 6)
+                result["significant_corrected"] = result.get("p_value", 1) < corrected_alpha
+                results.append(result)
+            results_by_strategy[strategy] = results
+
+        return results_by_strategy
+
+    def get_model_agreement_matrix(self, strategy: str) -> dict[str, Any]:
+        """
+        Build a full agreement matrix between all models for a strategy.
+        Returns both raw counts and Kappa values.
+        """
+        models = set()
+        for pred in self.engine.predictions[strategy]:
+            models.add(pred.model)
+
+        models = sorted(models)
+        n = len(models)
+
+        kappa_matrix = np.zeros((n, n))
+        agreement_matrix = np.zeros((n, n))
+
+        for i, m1 in enumerate(models):
+            for j, m2 in enumerate(models):
+                if i == j:
+                    kappa_matrix[i, j] = 1.0
+                    agreement_matrix[i, j] = 1.0
+                elif i < j:
+                    result = self.cohens_kappa(m1, m2, strategy)
+                    kappa = result.get("kappa", 0) or 0
+                    agreement = result.get("observed_agreement", 0) or 0
+                    kappa_matrix[i, j] = kappa
+                    kappa_matrix[j, i] = kappa
+                    agreement_matrix[i, j] = agreement
+                    agreement_matrix[j, i] = agreement
+
+        short_names = [
+            MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models
+        ]
+
+        return {
+            "models": models,
+            "short_names": short_names,
+            "kappa_matrix": kappa_matrix.tolist(),
+            "agreement_matrix": agreement_matrix.tolist(),
+        }
 
     def cohens_kappa(self, model1: str, model2: str, strategy: str) -> dict[str, Any]:
         """
@@ -761,35 +1086,40 @@ class ReportGenerator:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-    def generate_full_report(self) -> str:
-        """Generate the complete research evidence report."""
+    def generate_full_report(self, include_figures: bool = True) -> str:
+        """Generate the complete research evidence report with optional figures."""
         lines = [
             "# Research Evidence Report: LLM Misconception Detection",
             "",
             "Statistical analysis of prompt strategies for automated misconception detection.",
+            "",
+            "**Models:** GPT-5.1 vs Gemini 2.5 Flash",
             "",
             "---",
             "",
         ]
 
         # Section 1: Executive Summary
-        lines.extend(self._section_executive_summary())
+        lines.extend(self._section_executive_summary(include_figures))
 
         # Section 2: Strategy Comparison
-        lines.extend(self._section_strategy_comparison())
+        lines.extend(self._section_strategy_comparison(include_figures))
 
-        # Section 3: Inter-Rater Reliability
-        lines.extend(self._section_interrater_reliability())
+        # Section 3: Model Comparison (NEW)
+        lines.extend(self._section_model_comparison(include_figures))
 
-        # Section 4: Misconception Deep Dive
-        lines.extend(self._section_misconception_analysis())
+        # Section 4: Inter-Rater Reliability
+        lines.extend(self._section_interrater_reliability(include_figures))
 
-        # Section 5: Appendix
+        # Section 5: Misconception Deep Dive
+        lines.extend(self._section_misconception_analysis(include_figures))
+
+        # Section 6: Appendix
         lines.extend(self._section_appendix())
 
         return "\n".join(lines)
 
-    def _section_executive_summary(self) -> list[str]:
+    def _section_executive_summary(self, include_figures: bool = True) -> list[str]:
         """Generate executive summary section."""
         lines = [
             "## 1. Executive Statistical Summary",
@@ -835,6 +1165,10 @@ class ReportGenerator:
         lines.append("")
         lines.append("*Strategy with highest F1 is marked with **")
         lines.append("")
+
+        if include_figures:
+            lines.append("![Strategy Performance Comparison](figures/strategy_comparison.png)")
+            lines.append("")
 
         # Cochran's Q
         cochran = self.tester.cochrans_q_test()
@@ -901,7 +1235,7 @@ class ReportGenerator:
 
         return lines
 
-    def _section_strategy_comparison(self) -> list[str]:
+    def _section_strategy_comparison(self, include_figures: bool = True) -> list[str]:
         """Generate strategy comparison section with pairwise tests."""
         lines = [
             "## 2. Strategy Comparison (Pairwise Analysis)",
@@ -981,15 +1315,75 @@ class ReportGenerator:
 
             lines.append("")
 
+        if include_figures:
+            lines.append("![Confusion Matrices](figures/confusion_matrices.png)")
+            lines.append("")
+
         lines.append("---")
         lines.append("")
 
         return lines
 
-    def _section_interrater_reliability(self) -> list[str]:
+    def _section_model_comparison(self, include_figures: bool = True) -> list[str]:
+        """Generate model comparison section (GPT-5.1 vs Gemini 2.5 Flash)."""
+        lines = [
+            "## 3. Model Comparison: GPT-5.1 vs Gemini 2.5 Flash",
+            "",
+            "This section provides a head-to-head comparison of the two LLM models used in this evaluation.",
+            "",
+        ]
+
+        model_metrics = self.engine.compute_per_model_metrics()
+
+        # Summary table
+        lines.append("### Overall Performance Summary")
+        lines.append("")
+        lines.append("| Model | Avg Precision | Avg Recall | Avg F1 |")
+        lines.append("|-------|:-------------:|:----------:|:------:|")
+
+        for model_full, strategies_data in sorted(model_metrics.items()):
+            short = MODEL_CONFIG.get(model_full, {}).get("short_name", model_full.split("/")[-1])
+            avg_p = np.mean([m.precision for m in strategies_data.values()])
+            avg_r = np.mean([m.recall for m in strategies_data.values()])
+            avg_f1 = np.mean([m.f1 for m in strategies_data.values()])
+            lines.append(f"| {short} | {avg_p:.1%} | {avg_r:.1%} | {avg_f1:.1%} |")
+
+        lines.append("")
+
+        if include_figures:
+            lines.append("![Model Comparison](figures/model_comparison.png)")
+            lines.append("")
+
+        # McNemar tests between models
+        lines.append("### Statistical Comparison (McNemar's Test)")
+        lines.append("")
+        lines.append("Testing whether the performance difference between models is statistically significant:")
+        lines.append("")
+
+        mcnemar_results = self.tester.mcnemar_all_model_pairs()
+
+        for strategy, results in mcnemar_results.items():
+            lines.append(f"**{strategy.capitalize()}:**")
+            for r in results:
+                if "error" in r:
+                    lines.append(f"- {r.get('error', 'N/A')}")
+                else:
+                    names = r.get("model_names", ("Model1", "Model2"))
+                    p_val = r.get("p_value", "N/A")
+                    sig = "Yes" if r.get("significant") else "No"
+                    winner = r.get("winner", "tie")
+                    lines.append(f"- {names[0]} vs {names[1]}: p={p_val}, Significant={sig}, Winner={winner}")
+            lines.append("")
+
+        lines.append("---")
+        lines.append("")
+
+        return lines
+
+    def _section_interrater_reliability(self, include_figures: bool = True) -> list[str]:
         """Generate inter-rater reliability section."""
         lines = [
-            "## 3. Inter-Rater Reliability",
+            "## 4. Inter-Rater Reliability",
             "",
             "This section answers: **Do the LLM models agree with each other?** If models frequently disagree, ",
             "we can't trust their judgments. High agreement suggests the detection task is well-defined and models are reliable.",
@@ -1071,15 +1465,19 @@ class ReportGenerator:
 
                 lines.append("")
 
+        if include_figures:
+            lines.append("![Model Agreement](figures/model_agreement.png)")
+            lines.append("")
+
         lines.append("---")
         lines.append("")
 
         return lines
 
-    def _section_misconception_analysis(self) -> list[str]:
+    def _section_misconception_analysis(self, include_figures: bool = True) -> list[str]:
         """Generate per-misconception detection analysis."""
         lines = [
-            "## 4. Misconception Detection Analysis",
+            "## 5. Misconception Detection Analysis",
             "",
             "This section answers: **Which types of errors are easy vs. hard to detect?**",
             "",
@@ -1129,6 +1527,12 @@ class ReportGenerator:
 
         lines.append("")
 
+        if include_figures:
+            lines.append("![Misconception Detection Heatmap](figures/misconception_heatmap.png)")
+            lines.append("")
+            lines.append("![Misconception by Model](figures/misconception_by_model.png)")
+            lines.append("")
+
         # Hardest to detect
         lines.append("### Hardest-to-Detect Misconceptions")
         lines.append("")
@@ -1149,6 +1553,13 @@ class ReportGenerator:
             lines.append(f"1. **{misc_id}** ({name}): {rate:.0%} average detection rate")
 
         lines.append("")
+
+        # Per-question breakdown
+        if include_figures:
+            lines.append("### Per-Question Performance")
+            lines.append("")
+            lines.append("![Per-Question Breakdown](figures/per_question_breakdown.png)")
+            lines.append("")
 
         # NEW: LLM vs Ground Truth Distribution comparison
         lines.extend(self._subsection_llm_vs_ground_truth())
@@ -1254,7 +1665,7 @@ class ReportGenerator:
     def _section_appendix(self) -> list[str]:
         """Generate appendix with raw data."""
         lines = [
-            "## 5. Appendix: Raw Data",
+            "## 6. Appendix: Raw Data",
             "",
             "### Ground Truth Summary",
             "",
@@ -1303,9 +1714,419 @@ class ReportGenerator:
         return lines
 
 
-def run_analysis(output_path: str = "research_evidence_report.md") -> str:
+class VisualizationGenerator:
     """
-    Run the full analysis pipeline and generate report.
+    Generates publication-quality visualizations from analytics data.
+    Integrates with AnalyticsEngine for dynamic, up-to-date figures.
+    """
+
+    OUTPUT_DIR = Path("reports/figures")
+
+    def __init__(self, engine: AnalyticsEngine, tester: StatisticalTester):
+        self.engine = engine
+        self.tester = tester
+        self.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+        if HAS_PLOTTING:
+            plt.style.use("seaborn-v0_8-whitegrid")
+            sns.set_palette("viridis")
+
+        self.catalog = self._load_catalog()
+
+    def _load_catalog(self) -> dict[str, str]:
+        """Load misconception names from catalog."""
+        try:
+            with open("data/misconception_catalog.json") as f:
+                data = json.load(f)
+                return {m["id"]: m["name"] for m in data.get("misconceptions", [])}
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def generate_all(self) -> list[str]:
+        """Generate all visualizations and return list of generated file paths."""
+        if not HAS_PLOTTING:
+            print("Warning: matplotlib/seaborn not available. Skipping visualizations.")
+            return []
+
+        generated = []
+        generated.append(self.generate_strategy_comparison())
+        generated.append(self.generate_misconception_heatmap())
+        generated.append(self.generate_model_agreement())
+        generated.append(self.generate_model_comparison())
+        generated.append(self.generate_confusion_matrices())
+        generated.append(self.generate_per_question_breakdown())
+        generated.append(self.generate_misconception_by_model())
+        return [g for g in generated if g]
+
+    def generate_strategy_comparison(self) -> str | None:
+        """Generate strategy performance comparison bar chart."""
+        if not HAS_PLOTTING:
+            return None
+
+        metrics = self.engine.compute_strategy_metrics()
+        strategies = [s.capitalize() for s in self.engine.STRATEGIES]
+
+        data = {
+            "Precision": [metrics[s].precision * 100 for s in self.engine.STRATEGIES],
+            "Recall": [metrics[s].recall * 100 for s in self.engine.STRATEGIES],
+            "F1 Score": [metrics[s].f1 * 100 for s in self.engine.STRATEGIES],
+        }
+
+        df = pd.DataFrame(data, index=strategies)
+        df = df.reset_index().melt(id_vars="index", var_name="Metric", value_name="Score")
+        df.rename(columns={"index": "Strategy"}, inplace=True)
+
+        plt.figure(figsize=(10, 6))
+        ax = sns.barplot(data=df, x="Strategy", y="Score", hue="Metric")
+
+        plt.title("Performance Comparison by Prompt Strategy", fontsize=14, pad=20)
+        plt.ylim(0, 100)
+        plt.ylabel("Score (%)")
+        plt.xlabel("")
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+
+        for container in ax.containers:
+            ax.bar_label(container, fmt="%.1f")
+
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "strategy_comparison.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_misconception_heatmap(self) -> str | None:
+        """Generate misconception detection rate heatmap."""
+        if not HAS_PLOTTING:
+            return None
+
+        rates = self.engine.get_misconception_detection_rates()
+        all_miscs = set()
+        for strategy_rates in rates.values():
+            all_miscs.update(strategy_rates.keys())
+
+        # Build data matrix
+        data = {}
+        for misc_id in sorted(all_miscs):
+            short_name = self.catalog.get(misc_id, misc_id)[:20]
+            label = f"{misc_id} ({short_name})"
+            data[label] = [
+                rates[s].get(misc_id, {}).get("rate", 0) * 100 for s in self.engine.STRATEGIES
+            ]
+
+        strategies = [s.capitalize() for s in self.engine.STRATEGIES]
+        heatmap_data = pd.DataFrame(data).T
+        heatmap_data.columns = strategies
+
+        # Sort by average detection rate
+        heatmap_data["avg"] = heatmap_data.mean(axis=1)
+        heatmap_data = heatmap_data.sort_values("avg", ascending=False).drop("avg", axis=1)
+
+        plt.figure(figsize=(8, max(6, len(heatmap_data) * 0.5)))
+        sns.heatmap(
+            heatmap_data,
+            annot=True,
+            fmt=".0f",
+            cmap="RdYlGn",
+            vmin=0,
+            vmax=100,
+            cbar_kws={"label": "Detection Rate (%)"},
+        )
+
+        plt.title("Misconception Detection Rate by Strategy", fontsize=14, pad=20)
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "misconception_heatmap.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_model_agreement(self) -> str | None:
+        """Generate inter-model agreement bar chart (Kappa per strategy)."""
+        if not HAS_PLOTTING:
+            return None
+
+        strategies = [s.capitalize() for s in self.engine.STRATEGIES]
+        kappas = []
+
+        for strategy in self.engine.STRATEGIES:
+            result = self.tester.krippendorff_alpha(strategy)
+            kappas.append(result.get("alpha", 0) or 0)
+
+        # Color bars based on kappa value
+        colors = []
+        for k in kappas:
+            if k >= 0.8:
+                colors.append("#2ecc71")  # Green
+            elif k >= 0.6:
+                colors.append("#f1c40f")  # Yellow
+            else:
+                colors.append("#e74c3c")  # Red
+
+        plt.figure(figsize=(8, 5))
+        bars = plt.bar(strategies, kappas, color=colors)
+
+        plt.axhline(y=0.6, color="gray", linestyle="--", alpha=0.5, label="Substantial (0.6)")
+        plt.axhline(y=0.8, color="gray", linestyle=":", alpha=0.5, label="Perfect (0.8)")
+
+        plt.title("Inter-Model Agreement (Krippendorff's Alpha)", fontsize=14, pad=20)
+        plt.ylabel("Alpha Score")
+        plt.ylim(0, 1.0)
+
+        for bar in bars:
+            height = bar.get_height()
+            plt.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f"{height:.2f}",
+                ha="center",
+                va="bottom",
+            )
+
+        plt.legend()
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "model_agreement.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_model_comparison(self) -> str | None:
+        """Generate GPT-5.1 vs Gemini 2.5 Flash comparison chart."""
+        if not HAS_PLOTTING:
+            return None
+
+        model_metrics = self.engine.compute_per_model_metrics()
+        if len(model_metrics) < 2:
+            return None
+
+        # Get model data
+        model_data = {}
+        for model_full, strategies_data in model_metrics.items():
+            short = MODEL_CONFIG.get(model_full, {}).get("short_name", model_full.split("/")[-1])
+            color = MODEL_CONFIG.get(model_full, {}).get("color", "#333333")
+            
+            # Handle missing strategies gracefully
+            available_metrics = [m for m in strategies_data.values()]
+            if not available_metrics:
+                continue
+                
+            avg_f1 = np.mean([m.f1 for m in available_metrics])
+            avg_precision = np.mean([m.precision for m in available_metrics])
+            avg_recall = np.mean([m.recall for m in available_metrics])
+            
+            # Get F1 for each strategy (0 if missing)
+            f1_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).f1 * 100 for s in self.engine.STRATEGIES]
+            precision_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).precision * 100 for s in self.engine.STRATEGIES]
+            recall_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).recall * 100 for s in self.engine.STRATEGIES]
+            
+            model_data[short] = {
+                "color": color,
+                "f1": f1_list,
+                "precision": precision_list,
+                "recall": recall_list,
+                "avg_f1": avg_f1 * 100,
+                "avg_precision": avg_precision * 100,
+                "avg_recall": avg_recall * 100,
+            }
+
+        # Create grouped bar chart
+        fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+        # Left: F1 by strategy
+        x = np.arange(len(self.engine.STRATEGIES))
+        width = 0.35
+        strategies = [s.capitalize() for s in self.engine.STRATEGIES]
+
+        models = list(model_data.keys())
+        for i, model in enumerate(models):
+            offset = (i - 0.5) * width
+            bars = axes[0].bar(
+                x + offset,
+                model_data[model]["f1"],
+                width,
+                label=model,
+                color=model_data[model]["color"],
+            )
+            axes[0].bar_label(bars, fmt="%.1f", fontsize=8)
+
+        axes[0].set_ylabel("F1 Score (%)")
+        axes[0].set_title("F1 Score by Strategy", fontsize=12)
+        axes[0].set_xticks(x)
+        axes[0].set_xticklabels(strategies)
+        axes[0].legend()
+        axes[0].set_ylim(0, 100)
+
+        # Right: Overall metrics comparison
+        metrics = ["Precision", "Recall", "F1"]
+        x2 = np.arange(len(metrics))
+
+        for i, model in enumerate(models):
+            offset = (i - 0.5) * width
+            values = [
+                model_data[model]["avg_precision"],
+                model_data[model]["avg_recall"],
+                model_data[model]["avg_f1"],
+            ]
+            bars = axes[1].bar(
+                x2 + offset, values, width, label=model, color=model_data[model]["color"]
+            )
+            axes[1].bar_label(bars, fmt="%.1f", fontsize=8)
+
+        axes[1].set_ylabel("Score (%)")
+        axes[1].set_title("Overall Model Comparison", fontsize=12)
+        axes[1].set_xticks(x2)
+        axes[1].set_xticklabels(metrics)
+        axes[1].legend()
+        axes[1].set_ylim(0, 100)
+
+        plt.suptitle("GPT-5.1 vs Gemini 2.5 Flash Performance", fontsize=14)
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "model_comparison.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_confusion_matrices(self) -> str | None:
+        """Generate confusion matrix visualizations for each strategy."""
+        if not HAS_PLOTTING:
+            return None
+
+        metrics = self.engine.compute_strategy_metrics()
+        n_strategies = len(self.engine.STRATEGIES)
+
+        fig, axes = plt.subplots(1, n_strategies, figsize=(4 * n_strategies, 4))
+        if n_strategies == 1:
+            axes = [axes]
+
+        for idx, strategy in enumerate(self.engine.STRATEGIES):
+            m = metrics[strategy]
+            cm = np.array([[m.tn, m.fp], [m.fn, m.tp]])
+
+            sns.heatmap(
+                cm,
+                annot=True,
+                fmt="d",
+                cmap="Blues",
+                xticklabels=["Pred: No Error", "Pred: Error"],
+                yticklabels=["True: No Error", "True: Error"],
+                ax=axes[idx],
+            )
+            axes[idx].set_title(f"{strategy.capitalize()}\nF1={m.f1:.1%}")
+
+        plt.suptitle("Confusion Matrices by Strategy", fontsize=14)
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "confusion_matrices.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_per_question_breakdown(self) -> str | None:
+        """Generate per-question F1 score breakdown."""
+        if not HAS_PLOTTING:
+            return None
+
+        question_metrics = self.engine.get_per_question_metrics()
+        if not question_metrics:
+            return None
+
+        questions = sorted(question_metrics.keys())
+        strategies = self.engine.STRATEGIES
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        x = np.arange(len(questions))
+        width = 0.2
+
+        for i, strategy in enumerate(strategies):
+            offset = (i - len(strategies) / 2 + 0.5) * width
+            f1_values = [
+                question_metrics[q].get(strategy, {}).get("f1", 0) * 100 for q in questions
+            ]
+            ax.bar(x + offset, f1_values, width, label=strategy.capitalize())
+
+        ax.set_ylabel("F1 Score (%)")
+        ax.set_title("F1 Score by Question and Strategy", fontsize=14)
+        ax.set_xticks(x)
+        ax.set_xticklabels([q.upper() for q in questions])
+        ax.legend()
+        ax.set_ylim(0, 100)
+
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "per_question_breakdown.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+    def generate_misconception_by_model(self) -> str | None:
+        """Generate misconception detection rates by model."""
+        if not HAS_PLOTTING:
+            return None
+
+        model_rates = self.engine.get_per_model_misconception_rates()
+        if not model_rates:
+            return None
+
+        # Gather all misconceptions
+        all_miscs = set()
+        for rates in model_rates.values():
+            all_miscs.update(rates.keys())
+
+        if not all_miscs:
+            return None
+
+        # Build data for heatmap
+        models = sorted(model_rates.keys())
+        short_names = [
+            MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models
+        ]
+
+        sorted_miscs = sorted(all_miscs)
+        misc_labels = [
+            f"{m} ({self.catalog.get(m, 'Unknown')[:15]})" for m in sorted_miscs
+        ]
+
+        data = []
+        for misc_id in sorted_miscs:
+            row = []
+            for model in models:
+                rate = model_rates[model].get(misc_id, {}).get("rate", 0) * 100
+                row.append(rate)
+            data.append(row)
+
+        df = pd.DataFrame(data, index=misc_labels, columns=short_names)
+
+        plt.figure(figsize=(8, max(6, len(df) * 0.4)))
+        sns.heatmap(
+            df,
+            annot=True,
+            fmt=".0f",
+            cmap="RdYlGn",
+            vmin=0,
+            vmax=100,
+            cbar_kws={"label": "Detection Rate (%)"},
+        )
+
+        plt.title("Misconception Detection Rate by Model", fontsize=14, pad=20)
+        plt.xlabel("Model")
+        plt.tight_layout()
+        path = self.OUTPUT_DIR / "misconception_by_model.png"
+        plt.savefig(path, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"  Generated: {path}")
+        return str(path)
+
+
+def run_analysis(output_path: str = "reports/research_evidence_report.md", generate_figures: bool = True) -> str:
+    """
+    Run the full analysis pipeline and generate report with figures.
+
+    Args:
+        output_path: Path for the markdown report
+        generate_figures: Whether to generate visualization figures
 
     Returns the path to the generated report.
     """
@@ -1328,14 +2149,27 @@ def run_analysis(output_path: str = "research_evidence_report.md") -> str:
     print("Running statistical tests...")
     tester = StatisticalTester(engine)
 
-    print("Generating report...")
-    generator = ReportGenerator(engine, tester)
-    report = generator.generate_full_report()
+    # Generate visualizations
+    figures = []
+    if generate_figures:
+        print("\nGenerating visualizations...")
+        viz = VisualizationGenerator(engine, tester)
+        figures = viz.generate_all()
 
-    with open(output_path, "w") as f:
+    print("\nGenerating report...")
+    generator = ReportGenerator(engine, tester)
+    report = generator.generate_full_report(include_figures=generate_figures)
+
+    # Ensure output directory exists
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_file, "w") as f:
         f.write(report)
 
     print(f"\nReport saved to: {output_path}")
+    if figures:
+        print("Figures saved to: reports/figures/")
 
     # Print summary
     metrics = engine.strategy_metrics
@@ -1346,6 +2180,19 @@ def run_analysis(output_path: str = "research_evidence_report.md") -> str:
     for strategy in engine.STRATEGIES:
         m = metrics[strategy]
         print(f"{strategy.upper():12} | P={m.precision:.1%} R={m.recall:.1%} F1={m.f1:.1%}")
+
+    # Print model comparison
+    model_metrics = engine.model_metrics
+    if model_metrics:
+        print("\n" + "=" * 60)
+        print("MODEL COMPARISON SUMMARY (Average across strategies)")
+        print("=" * 60)
+        for model, strategies in model_metrics.items():
+            short = MODEL_CONFIG.get(model, {}).get("short_name", model.split("/")[-1])
+            avg_f1 = np.mean([m.f1 for m in strategies.values()])
+            avg_p = np.mean([m.precision for m in strategies.values()])
+            avg_r = np.mean([m.recall for m in strategies.values()])
+            print(f"{short:20} | P={avg_p:.1%} R={avg_r:.1%} F1={avg_f1:.1%}")
 
     return output_path
 
