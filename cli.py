@@ -10,7 +10,7 @@ from rich.align import Align
 # Rich Imports
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
+from rich.progress import Progress, TaskID
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
@@ -138,9 +138,9 @@ class GradingTracker:
     """Thread-safe tracker for grading progress across models."""
 
     def __init__(self):
-        self.model_status: dict[str, str] = {model: "idle" for model in MODELS}
-        self.model_completed: dict[str, int] = {model: 0 for model in MODELS}
-        self.model_errors: dict[str, int] = {model: 0 for model in MODELS}
+        self.model_status: dict[str, str] = dict.fromkeys(MODELS, "idle")
+        self.model_completed: dict[str, int] = dict.fromkeys(MODELS, 0)
+        self.model_errors: dict[str, int] = dict.fromkeys(MODELS, 0)
         self.lock = asyncio.Lock()
 
     async def set_status(self, model: str, status: str):
@@ -354,7 +354,6 @@ async def batch_grade_students(students: list[str], strategy: str = "minimal") -
     """
     from rich.layout import Layout
     from rich.live import Live
-    from rich.spinner import Spinner
 
     sem = asyncio.Semaphore(MAX_CONCURRENT_STUDENTS)
     tracker = GradingTracker()

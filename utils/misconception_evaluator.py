@@ -6,7 +6,6 @@ in authentic_seeded/manifest.json to calculate precision, recall, and F1.
 """
 
 import json
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -710,7 +709,7 @@ class MisconceptionEvaluator:
                     lines.append(f"  - *Related concepts:* {', '.join(d.related_concepts)}")
 
                 if d.evidence_snippets:
-                    lines.append(f"  - *Evidence:*")
+                    lines.append("  - *Evidence:*")
                     for snippet in d.evidence_snippets[:2]:  # Limit to 2 snippets
                         # Clean up snippet for display
                         clean_snippet = snippet.strip().replace("\n", " ")[:100]

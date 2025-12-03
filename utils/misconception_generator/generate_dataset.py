@@ -13,7 +13,7 @@ import random
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import typer
 from dotenv import load_dotenv
@@ -129,9 +129,9 @@ def choose_str(label: str, default: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def load_question_texts() -> Dict[str, str]:
+def load_question_texts() -> dict[str, str]:
     """Load full markdown for Q1-Q4 from disk."""
-    texts: Dict[str, str] = {}
+    texts: dict[str, str] = {}
     for q, path in QUESTION_FILES.items():
         if not path.exists():
             raise FileNotFoundError(f"Missing question prompt: {path}")
@@ -139,7 +139,7 @@ def load_question_texts() -> Dict[str, str]:
     return texts
 
 
-def load_misconceptions(path: Path) -> List[Dict[str, Any]]:
+def load_misconceptions(path: Path) -> list[dict[str, Any]]:
     """Load misconceptions JSON."""
     if not path.exists():
         raise FileNotFoundError(f"Missing misconceptions file: {path}")
@@ -157,7 +157,7 @@ def strip_code_fences(text: str) -> str:
     return text.strip()
 
 
-def instruction_for_question(instructions: Dict[str, str], question: str) -> Optional[str]:
+def instruction_for_question(instructions: dict[str, str], question: str) -> str | None:
     """Pick the instruction string for a specific question, handling combined keys."""
     if question in instructions:
         return instructions[question]
@@ -175,7 +175,7 @@ def instruction_for_question(instructions: Dict[str, str], question: str) -> Opt
     return None
 
 
-def question_applies(misconception: Dict[str, Any], question: str) -> bool:
+def question_applies(misconception: dict[str, Any], question: str) -> bool:
     """Check if a misconception applies to a question."""
     applicable = misconception.get("applicable_questions", [])
     return question.upper() in {q.upper() for q in applicable}
@@ -187,18 +187,18 @@ def question_applies(misconception: Dict[str, Any], question: str) -> bool:
 
 
 def generate_manifest(
-    misconceptions: List[Dict[str, Any]],
-    question_texts: Dict[str, str],
+    misconceptions: list[dict[str, Any]],
+    question_texts: dict[str, str],
     seed: int,
     student_count: int = DEFAULT_STUDENT_COUNT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Construct the manifest structure."""
     random.seed(seed)
     faker = Faker()
     faker.seed_instance(seed)
 
     used_ids = set()
-    students: List[Dict[str, Any]] = []
+    students: list[dict[str, Any]] = []
 
     for _ in range(student_count):
         first = faker.first_name()
@@ -211,7 +211,7 @@ def generate_manifest(
 
         persona = random.choice(PERSONAS)
         assigned = random.sample(misconceptions, k=random.randint(1, 2))
-        files: Dict[str, Dict[str, Any]] = {}
+        files: dict[str, dict[str, Any]] = {}
 
         for q in QUESTION_FILES:
             applicable = [m for m in assigned if question_applies(m, q)]
@@ -255,7 +255,7 @@ def generate_manifest(
     }
 
 
-def write_manifest(manifest: Dict[str, Any], path: Path, force: bool = False) -> None:
+def write_manifest(manifest: dict[str, Any], path: Path, force: bool = False) -> None:
     """Persist manifest to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and not force:
@@ -274,7 +274,7 @@ def extract_text_from_response(response: Any) -> str:
     # Expected path: response.output[0].content[0].text
     try:
         outputs = getattr(response, "output", None) or []
-        collected: List[str] = []
+        collected: list[str] = []
         for output in outputs:
             for content in getattr(output, "content", []) or []:
                 text = getattr(content, "text", None)
@@ -297,8 +297,8 @@ def build_messages(
     question: str,
     question_text: str,
     brief: str,
-    file_entry: Dict[str, Any],
-) -> List[Dict[str, str]]:
+    file_entry: dict[str, Any],
+) -> list[dict[str, str]]:
     """Construct system and user messages for Responses API."""
     system = (
         "You are a CS1 student writing Java code. "
@@ -338,12 +338,13 @@ async def generate_file(
     question: str,
     question_text: str,
     brief: str,
-    file_entry: Dict[str, Any],
+    file_entry: dict[str, Any],
     output_path: Path,
-    semaphore: Optional[asyncio.Semaphore] = None,
+    semaphore: asyncio.Semaphore | None = None,
     max_retries: int = 3,
 ) -> None:
     """Generate a single Java file."""
+
     async def _call_api() -> str:
         messages = build_messages(persona, question, question_text, brief, file_entry)
         response = await client.responses.create(
@@ -354,7 +355,7 @@ async def generate_file(
         return extract_text_from_response(response)
 
     attempt = 0
-    last_error: Optional[Exception] = None
+    last_error: Exception | None = None
 
     while attempt < max_retries:
         try:
@@ -370,9 +371,11 @@ async def generate_file(
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             attempt += 1
-            await asyncio.sleep(min(2 ** attempt, 8))
+            await asyncio.sleep(min(2**attempt, 8))
 
-    raise RuntimeError(f"Failed to generate {output_path} after {max_retries} attempts") from last_error
+    raise RuntimeError(
+        f"Failed to generate {output_path} after {max_retries} attempts"
+    ) from last_error
 
 
 # --------------------------------------------------------------------------- #
@@ -458,7 +461,7 @@ def manifest(
         help="Where to write the manifest.",
     ),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to simulate."),
-    seed: Optional[int] = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
+    seed: int | None = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
     force: bool = typer.Option(False, help="Overwrite existing manifest if present."),
 ):
     """Generate manifest.json only."""
@@ -494,7 +497,7 @@ def run(
     manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Where to write the manifest."),
     output_root: Path = typer.Option(DEFAULT_OUTPUT_ROOT, help="Root output directory."),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to simulate."),
-    seed: Optional[int] = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
+    seed: int | None = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
     model: str = typer.Option(DEFAULT_MODEL, help="OpenAI model to use."),
     concurrency: int = typer.Option(20, help="Max concurrent requests (0 or 1 for sequential)."),
     force: bool = typer.Option(False, help="Overwrite manifest if it exists."),
@@ -534,11 +537,17 @@ def interactive_main() -> None:
         choice = typer.prompt("Selection", default="1").strip()
 
         if choice == "1":
-            m_path = choose_path("misconceptions file", defaults["misconceptions_path"], must_exist=True)
+            m_path = choose_path(
+                "misconceptions file", defaults["misconceptions_path"], must_exist=True
+            )
             manifest_path = choose_path("manifest output path", defaults["manifest_path"])
             students = choose_int("number of students", defaults["students"])
             use_default_seed = typer.confirm("Use current UNIX time as seed?", default=True)
-            seed = None if use_default_seed else choose_int("custom seed", int(datetime.utcnow().timestamp()), min_value=0)
+            seed = (
+                None
+                if use_default_seed
+                else choose_int("custom seed", int(datetime.utcnow().timestamp()), min_value=0)
+            )
             force = typer.confirm("Overwrite manifest if exists?", default=False)
             try:
                 manifest(
@@ -554,7 +563,9 @@ def interactive_main() -> None:
             manifest_path = choose_path("manifest path", defaults["manifest_path"], must_exist=True)
             output_root = choose_path("output root", defaults["output_root"])
             model = choose_str("model", defaults["model"])
-            concurrency = choose_int("max concurrency (1 = sequential)", defaults["concurrency"], min_value=1)
+            concurrency = choose_int(
+                "max concurrency (1 = sequential)", defaults["concurrency"], min_value=1
+            )
             dry_run = typer.confirm("Dry run (no API calls or writes)?", default=False)
             try:
                 generate(
@@ -567,14 +578,22 @@ def interactive_main() -> None:
             except Exception as exc:  # noqa: BLE001
                 console.print(f"[red]Error: {exc}[/red]")
         elif choice == "3":
-            m_path = choose_path("misconceptions file", defaults["misconceptions_path"], must_exist=True)
+            m_path = choose_path(
+                "misconceptions file", defaults["misconceptions_path"], must_exist=True
+            )
             manifest_path = choose_path("manifest output path", defaults["manifest_path"])
             output_root = choose_path("output root", defaults["output_root"])
             students = choose_int("number of students", defaults["students"])
             use_default_seed = typer.confirm("Use current UNIX time as seed?", default=True)
-            seed = None if use_default_seed else choose_int("custom seed", int(datetime.utcnow().timestamp()), min_value=0)
+            seed = (
+                None
+                if use_default_seed
+                else choose_int("custom seed", int(datetime.utcnow().timestamp()), min_value=0)
+            )
             model = choose_str("model", defaults["model"])
-            concurrency = choose_int("max concurrency (1 = sequential)", defaults["concurrency"], min_value=1)
+            concurrency = choose_int(
+                "max concurrency (1 = sequential)", defaults["concurrency"], min_value=1
+            )
             force = typer.confirm("Overwrite manifest if exists?", default=False)
             dry_run = typer.confirm("Dry run (skip API calls)?", default=False)
             try:

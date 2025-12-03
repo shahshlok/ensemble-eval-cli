@@ -8,8 +8,8 @@ The key research question: Can LLMs discover misconceptions WITHOUT being given 
 from __future__ import annotations
 
 import json
-from typing import Any
 from enum import Enum
+from typing import Any
 
 
 class PromptStrategy(str, Enum):

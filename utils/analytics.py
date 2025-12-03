@@ -23,8 +23,9 @@ from scipy import stats
 # Visualization imports (optional - gracefully degrade if not available)
 try:
     import matplotlib.pyplot as plt
-    import seaborn as sns
     import pandas as pd
+    import seaborn as sns
+
     HAS_PLOTTING = True
 except ImportError:
     HAS_PLOTTING = False
@@ -553,7 +554,9 @@ class AnalyticsEngine:
                 tp, fp, fn, tn = counts["tp"], counts["fp"], counts["fn"], counts["tn"]
                 precision = tp / (tp + fp) if (tp + fp) > 0 else 0
                 recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+                f1 = (
+                    2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+                )
                 accuracy = (tp + tn) / (tp + fp + fn + tn) if (tp + fp + fn + tn) > 0 else 0
 
                 results[qid][strategy] = {
@@ -874,9 +877,7 @@ class StatisticalTester:
                     agreement_matrix[i, j] = agreement
                     agreement_matrix[j, i] = agreement
 
-        short_names = [
-            MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models
-        ]
+        short_names = [MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models]
 
         return {
             "models": models,
@@ -1357,7 +1358,9 @@ class ReportGenerator:
         # McNemar tests between models
         lines.append("### Statistical Comparison (McNemar's Test)")
         lines.append("")
-        lines.append("Testing whether the performance difference between models is statistically significant:")
+        lines.append(
+            "Testing whether the performance difference between models is statistically significant:"
+        )
         lines.append("")
 
         mcnemar_results = self.tester.mcnemar_all_model_pairs()
@@ -1372,7 +1375,9 @@ class ReportGenerator:
                     p_val = r.get("p_value", "N/A")
                     sig = "Yes" if r.get("significant") else "No"
                     winner = r.get("winner", "tie")
-                    lines.append(f"- {names[0]} vs {names[1]}: p={p_val}, Significant={sig}, Winner={winner}")
+                    lines.append(
+                        f"- {names[0]} vs {names[1]}: p={p_val}, Significant={sig}, Winner={winner}"
+                    )
             lines.append("")
 
         lines.append("---")
@@ -1618,46 +1623,50 @@ class ReportGenerator:
             for misc_id in sorted_ids:
                 name = self.catalog.get(misc_id, "Unknown")[:30]
                 gt = gt_counts[misc_id]
-                
+
                 # Detection count for THIS model across ALL strategies
                 # Note: This sums up detections from 4 strategies, so max possible is 4 * GT
                 # To make it comparable, we should average it or just show raw?
                 # Showing raw sums across 4 strategies is confusing because GT is fixed.
                 # Let's show the count from the BEST performing strategy for this model/misconception?
-                # Or just sum them and note it? 
+                # Or just sum them and note it?
                 # Actually, standard practice is to evaluate the 'system'.
                 # If we have 4 strategies, we have 4 chances to detect.
                 # Let's calculate the 'Average Detection Rate' across the 4 strategies for this model.
-                
+
                 detections_across_strategies = llm_counts[model_name].get(misc_id, 0)
                 # Divide by 4 to get average detections per single run
                 avg_detected = detections_across_strategies / 4.0
-                
+
                 delta = avg_detected - gt
-                
+
                 # Assessment based on average
                 if gt == 0 and avg_detected > 0:
                     assessment = "Hallucinated"
                 elif gt > 0 and avg_detected == 0:
                     assessment = "Missed"
                 elif delta > 0:
-                     pct = (delta / gt) * 100
-                     assessment = f"Over (+{pct:.0f}%)"
+                    pct = (delta / gt) * 100
+                    assessment = f"Over (+{pct:.0f}%)"
                 else:
-                     pct = (abs(delta) / gt) * 100
-                     assessment = f"Under (-{pct:.0f}%)"
+                    pct = (abs(delta) / gt) * 100
+                    assessment = f"Under (-{pct:.0f}%)"
 
                 delta_str = f"{delta:+.1f}"
-                
-                lines.append(f"| {misc_id} | {name} | {gt} | {avg_detected:.1f} | {delta_str} | {assessment} |")
+
+                lines.append(
+                    f"| {misc_id} | {name} | {gt} | {avg_detected:.1f} | {delta_str} | {assessment} |"
+                )
 
             lines.append("")
-            
+
             # Add model summary
             total_detected = sum(llm_counts[model_name].values()) / 4.0
             total_gt = sum(gt_counts.values())
             lines.append(f"**Summary for {short_name}:**")
-            lines.append(f"- Average Total Detections: {total_detected:.1f} (vs {total_gt} real errors)")
+            lines.append(
+                f"- Average Total Detections: {total_detected:.1f} (vs {total_gt} real errors)"
+            )
             lines.append("")
 
         return lines
@@ -1905,21 +1914,30 @@ class VisualizationGenerator:
         for model_full, strategies_data in model_metrics.items():
             short = MODEL_CONFIG.get(model_full, {}).get("short_name", model_full.split("/")[-1])
             color = MODEL_CONFIG.get(model_full, {}).get("color", "#333333")
-            
+
             # Handle missing strategies gracefully
             available_metrics = [m for m in strategies_data.values()]
             if not available_metrics:
                 continue
-                
+
             avg_f1 = np.mean([m.f1 for m in available_metrics])
             avg_precision = np.mean([m.precision for m in available_metrics])
             avg_recall = np.mean([m.recall for m in available_metrics])
-            
+
             # Get F1 for each strategy (0 if missing)
-            f1_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).f1 * 100 for s in self.engine.STRATEGIES]
-            precision_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).precision * 100 for s in self.engine.STRATEGIES]
-            recall_list = [strategies_data.get(s, StrategyMetrics(strategy=s)).recall * 100 for s in self.engine.STRATEGIES]
-            
+            f1_list = [
+                strategies_data.get(s, StrategyMetrics(strategy=s)).f1 * 100
+                for s in self.engine.STRATEGIES
+            ]
+            precision_list = [
+                strategies_data.get(s, StrategyMetrics(strategy=s)).precision * 100
+                for s in self.engine.STRATEGIES
+            ]
+            recall_list = [
+                strategies_data.get(s, StrategyMetrics(strategy=s)).recall * 100
+                for s in self.engine.STRATEGIES
+            ]
+
             model_data[short] = {
                 "color": color,
                 "f1": f1_list,
@@ -2080,14 +2098,10 @@ class VisualizationGenerator:
 
         # Build data for heatmap
         models = sorted(model_rates.keys())
-        short_names = [
-            MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models
-        ]
+        short_names = [MODEL_CONFIG.get(m, {}).get("short_name", m.split("/")[-1]) for m in models]
 
         sorted_miscs = sorted(all_miscs)
-        misc_labels = [
-            f"{m} ({self.catalog.get(m, 'Unknown')[:15]})" for m in sorted_miscs
-        ]
+        misc_labels = [f"{m} ({self.catalog.get(m, 'Unknown')[:15]})" for m in sorted_miscs]
 
         data = []
         for misc_id in sorted_miscs:
@@ -2120,7 +2134,9 @@ class VisualizationGenerator:
         return str(path)
 
 
-def run_analysis(output_path: str = "reports/research_evidence_report.md", generate_figures: bool = True) -> str:
+def run_analysis(
+    output_path: str = "reports/research_evidence_report.md", generate_figures: bool = True
+) -> str:
     """
     Run the full analysis pipeline and generate report with figures.
 
