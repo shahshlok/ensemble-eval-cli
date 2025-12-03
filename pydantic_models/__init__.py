@@ -16,58 +16,21 @@ Main Components:
 __version__ = "1.0.0"
 
 # Root evaluation document
-# Comparison models
-from .comparison import (
-    AlternativeScores,
-    CategoryAgreement,
-    CategoryDifference,
-    CategoryInsights,
-    CategoryStatistics,
-    Comparison,
-    ComparisonMetadata,
-    ConfidenceAnalysis,
-    ConfidenceInterval95,
-    ConfidenceRange,
-    ConfidenceStats,
-    ConfidenceStatsPerCategory,
-    ConsistencyScore,
-    EnsembleDecision,
-    EnsembleQuality,
-    Flags,
-    HighConfidenceDisagreement,
-    LargestCategoryDisagreement,
-    LowConfidenceCategory,
-    LowestConfidenceCategory,
-    MisconceptionOverlap,
-    MisconceptionSummary,
-    ModelCharacteristics,
-    MostAgreedCategory,
-    MostControversialCategory,
-    PairwiseComparison,
-    ReliabilityMetrics,
-    ScoreSummary,
-    StrictnessRanking,
-    ThresholdsConfig,
-)
-
 # Context models
 from .context import Context
 from .evaluation import EvaluationDocument
 
 # Model evaluation models
 from .models import (
-    CategoryScore,
     Config,
     Evidence,
-    Feedback,
     LLMEvaluationResponse,
     Misconception,
     ModelEvaluation,
-    Scores,
 )
 
-# Rubric models
-from .rubric import Rubric, RubricCategory
+# Submission models
+from .submission import StudentFile, Submission
 
 # Submission models
 from .submission import StudentFile, Submission
@@ -80,53 +43,10 @@ __all__ = [
     # Submission
     "Submission",
     "StudentFile",
-    # Rubric
-    "Rubric",
-    "RubricCategory",
     # Model evaluation
     "ModelEvaluation",
     "LLMEvaluationResponse",
     "Config",
-    "Scores",
-    "CategoryScore",
-    "Feedback",
     "Evidence",
     "Misconception",
-    # Comparison - main
-    "Comparison",
-    # Comparison - score analysis
-    "ScoreSummary",
-    "PairwiseComparison",
-    "CategoryDifference",
-    "LargestCategoryDisagreement",
-    "CategoryAgreement",
-    "CategoryStatistics",
-    "ConfidenceStats",
-    "CategoryInsights",
-    "MostControversialCategory",
-    "MostAgreedCategory",
-    "LowestConfidenceCategory",
-    # Comparison - misconception analysis
-    "MisconceptionSummary",
-    "MisconceptionOverlap",
-    # Comparison - confidence analysis
-    "ConfidenceAnalysis",
-    "ConfidenceRange",
-    "ConfidenceStatsPerCategory",
-    "HighConfidenceDisagreement",
-    "LowConfidenceCategory",
-    # Comparison - model characteristics
-    "ModelCharacteristics",
-    "StrictnessRanking",
-    "ConsistencyScore",
-    # Comparison - reliability
-    "ReliabilityMetrics",
-    "ConfidenceInterval95",
-    # Comparison - ensemble
-    "EnsembleDecision",
-    "AlternativeScores",
-    "EnsembleQuality",
-    "Flags",
-    "ComparisonMetadata",
-    "ThresholdsConfig",
 ]

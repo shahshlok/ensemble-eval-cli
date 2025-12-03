@@ -297,7 +297,6 @@ async def process_student_wrapper(
                         student_id,
                         student_name,
                         question_text,
-                        rubric_data,
                         student_file_name,
                         valid_evals,
                         question_source_path=question_file,
@@ -495,7 +494,6 @@ async def batch_grade_students(students: list[str], strategy: str = "minimal") -
                             student_id,
                             student_name,
                             question_text,
-                            rubric_data,
                             student_file_name,
                             valid_evals,
                             question_source_path=question_file,
@@ -588,10 +586,7 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
     table.add_column("Q", style="yellow")
     table.add_column("2.5-Flash", justify="right", style="cyan")
     table.add_column("GPT5.1", justify="right", style="green")
-    table.add_column("Avg", justify="right", style="bold white")
-    table.add_column("Range", justify="right", style="red")
-    table.add_column("Conf", justify="right", style="blue")
-    table.add_column("Flag", justify="center")
+    table.add_column("Status", justify="center")
 
     displayed_count = 0
 
@@ -603,9 +598,6 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
             table.add_row(
                 student,
                 res.get("question", "-"),
-                "-",
-                "-",
-                "-",
                 "-",
                 "-",
                 "[yellow]S[/yellow]" if res.get("status") == "skipped" else "[red]X[/red]",
@@ -621,42 +613,22 @@ def display_grading_results(results: list[dict], strategy: str = "minimal"):
         gemini_flash_eval = evals.get("google/gemini-2.5-flash-preview-09-2025")
         gpt51_eval = evals.get("openai/gpt-5.1")
 
-        # Get scores
-        valid_scores = []
-        for ev in [gemini_flash_eval, gpt51_eval]:
-            if ev:
-                valid_scores.append(ev.scores.total_points_awarded)
+        # Count misconceptions
+        flash_count = len(gemini_flash_eval.misconceptions) if gemini_flash_eval else 0
+        gpt_count = len(gpt51_eval.misconceptions) if gpt51_eval else 0
 
-        avg_score = sum(valid_scores) / len(valid_scores) if valid_scores else 0
-        score_range = max(valid_scores) - min(valid_scores) if len(valid_scores) >= 2 else 0
-
-        # Calculate average confidence
-        confs = []
-        for ev in [gemini_flash_eval, gpt51_eval]:
-            if ev:
-                confs.extend([cs.confidence for cs in ev.category_scores])
-
-        avg_conf = (sum(confs) / len(confs) * 100) if confs else 0
-
-        # Flag logic - flag if range is > 1.5 points (significant disagreement)
-        is_flagged = score_range > 1.5
+        # Flag logic - flag if counts differ
+        is_flagged = flash_count != gpt_count
         flag = "[red]!![/red]" if is_flagged else "[green]OK[/green]"
 
-        # Filter: Only show if flagged or error (already handled above)
-        if is_flagged:
-            table.add_row(
-                student,
-                question,
-                f"{gemini_flash_eval.scores.total_points_awarded:.1f}"
-                if gemini_flash_eval
-                else "-",
-                f"{gpt51_eval.scores.total_points_awarded:.1f}" if gpt51_eval else "-",
-                f"{avg_score:.1f}",
-                f"{score_range:.1f}",
-                f"{avg_conf:.0f}%",
-                flag,
-            )
-            displayed_count += 1
+        table.add_row(
+            student,
+            question,
+            f"{flash_count} misc",
+            f"{gpt_count} misc",
+            flag,
+        )
+        displayed_count += 1
 
     if displayed_count > 0:
         console.print(table)

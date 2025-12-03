@@ -10,11 +10,34 @@ from pydantic_models import (
     EvaluationDocument,
     LLMEvaluationResponse,
     ModelEvaluation,
-    Rubric,
+
     StudentFile,
     Submission,
 )
 from utils.llm.openrouter import get_structured_response
+
+
+
+
+
+def load_student_submission(
+    student_id: str, submission_dir: str = "student_submissions"
+) -> tuple[str, str]:
+    """
+    Loads the student submission.
+    Returns: (code_content, filename)
+    """
+    student_dir = os.path.join(submission_dir, student_id)
+    if not os.path.exists(student_dir):
+        raise FileNotFoundError(f"Student directory not found: {student_dir}")
+
+    # Find the first .java file (assuming Java for now as per grade_sergio.py)
+    for file in os.listdir(student_dir):
+        if file.endswith(".java"):
+            with open(os.path.join(student_dir, file)) as f:
+                return f.read(), file
+
+    raise FileNotFoundError(f"No .java file found for student {student_id}")
 
 
 def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
@@ -97,26 +120,6 @@ def load_rubric(file_path: str) -> dict[str, Any]:
         return json.load(f)
 
 
-def load_student_submission(
-    student_id: str, submission_dir: str = "student_submissions"
-) -> tuple[str, str]:
-    """
-    Loads the student submission.
-    Returns: (code_content, filename)
-    """
-    student_dir = os.path.join(submission_dir, student_id)
-    if not os.path.exists(student_dir):
-        raise FileNotFoundError(f"Student directory not found: {student_dir}")
-
-    # Find the first .java file (assuming Java for now as per grade_sergio.py)
-    for file in os.listdir(student_dir):
-        if file.endswith(".java"):
-            with open(os.path.join(student_dir, file)) as f:
-                return f.read(), file
-
-    raise FileNotFoundError(f"No .java file found for student {student_id}")
-
-
 def construct_prompt(
     question_text: str,
     rubric_data: dict[str, Any],
@@ -156,9 +159,6 @@ async def grade_with_model(model_name: str, messages: list[dict[str, str]]) -> M
             provider="openrouter",
             run_id=f"run_{uuid.uuid4().hex[:8]}",
             config=Config(system_prompt_id="simple_direct_prompt", rubric_prompt_id="rubric_v1"),
-            scores=llm_response.scores,
-            category_scores=llm_response.category_scores,
-            feedback=llm_response.feedback,
             misconceptions=llm_response.misconceptions,
         )
     except Exception as e:
@@ -169,7 +169,6 @@ def create_evaluation_document(
     student_id: str,
     student_name: str,
     question_text: str,
-    rubric_data: dict[str, Any],
     filename: str,
     model_evals: dict[str, ModelEvaluation],
     question_source_path: str = "data/question_insurance.md",
@@ -196,36 +195,6 @@ def create_evaluation_document(
         files=[StudentFile(path=filename, language="Java")],
     )
 
-    # Rubric
-    rubric_categories = []
-    for cat in rubric_data["categories"]:
-        # Handle both old JSON format (name) and new MD format (task)
-        task_name = cat.get("task", cat.get("name", "Unknown Task"))
-        points = cat.get("points", cat.get("max_points", 0.0))
-
-        rubric_categories.append(
-            {
-                "category_id": task_name.lower().replace(" ", "_").replace("&", "and"),
-                "task": task_name,
-                "points": float(points),
-                "topic": cat.get("topic", "Unspecified"),
-                "description": cat["description"],
-            }
-        )
-
-    # Extract rubric metadata from rubric_data or use sensible defaults
-    rubric_id = rubric_data.get(
-        "rubric_id", f"rubric_{rubric_data.get('title', 'unknown').lower().replace(' ', '_')}"
-    )
-    rubric_title = rubric_data.get("title", "Rubric")
-
-    rubric = Rubric(
-        rubric_id=rubric_id,
-        title=rubric_title,
-        total_points=float(rubric_data["totalPoints"]),
-        categories=rubric_categories,
-    )
-
     return EvaluationDocument(
         evaluation_id=f"eval_{uuid.uuid4()}",
         schema_version="1.0.0",
@@ -233,6 +202,5 @@ def create_evaluation_document(
         created_by="cli.py",
         context=context,
         submission=submission,
-        rubric=rubric,
         models=model_evals,
     )

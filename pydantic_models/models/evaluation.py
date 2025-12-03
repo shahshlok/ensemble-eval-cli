@@ -72,67 +72,7 @@ class Config(BaseModel):
     )
 
 
-class Scores(BaseModel):
-    """Overall scoring information."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    total_points_awarded: float = Field(
-        ..., description="Sum of all category_scores[*].points_awarded"
-    )
-    max_points: float = Field(
-        ..., description="Maximum possible points (should match rubric.total_points)"
-    )
-    percentage: float = Field(
-        ..., description="Percentage score (total_points_awarded / max_points * 100)"
-    )
-
-    @model_validator(mode="after")
-    def validate_percentage(self) -> "Scores":
-        if self.max_points <= 0:
-            return self
-        expected = (self.total_points_awarded / self.max_points) * 100
-        # Allow small floating point slack
-        if abs(self.percentage - expected) > 1e-6:
-            raise ValueError(
-                f"percentage {self.percentage} does not match "
-                f"total_points_awarded / max_points * 100 ({expected})"
-            )
-        return self
-
-
-class CategoryScore(BaseModel):
-    """Scoring information for a specific rubric category."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    task: str = Field(..., description="The task name from the rubric")
-    points_awarded: float = Field(..., description="Points this model gave in this category")
-    max_points: float = Field(..., description="Maximum possible points in this category")
-    reasoning: str = Field(..., description="Category-specific reasoning for the score")
-    confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Model's confidence in this category score (0-1)"
-    )
-    reasoning_tokens: int = Field(
-        ..., description="Number of tokens in reasoning (proxy for explanation depth)"
-    )
-
-
-class Feedback(BaseModel):
-    """Human-readable feedback bundle for a submission."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    overall_comment: str = Field(
-        ...,
-        description="Holistic comment on the submission (descriptive, what you'd show a student)",
-    )
-    strengths: list[str] = Field(
-        ..., description="Bullet-style list of strengths in the submission"
-    )
-    areas_for_improvement: list[str] = Field(
-        ..., description="Bullet-style list of weaknesses/next steps for the student"
-    )
 
 
 class Evidence(BaseModel):
@@ -277,12 +217,6 @@ class LLMEvaluationResponse(BaseModel):
     This is what the LLM fills out. Metadata (model_name, provider, run_id, config)
     is added by the developer to create the full ModelEvaluation.
     """
-
-    scores: Scores = Field(..., description="Aggregate score for this model")
-    category_scores: list[CategoryScore] = Field(
-        ..., description="Per-category rubric scores with justification"
-    )
-    feedback: Feedback = Field(..., description="Human-readable feedback bundle for this model")
 
     # Misconceptions has the Evidence model nested in it
     misconceptions: list[Misconception] = Field(
