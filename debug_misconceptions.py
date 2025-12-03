@@ -5,7 +5,7 @@ from collections import defaultdict
 # Add current directory to path
 sys.path.append(os.getcwd())
 
-from utils.misconception_analyzer import MisconceptionAnalyzer, normalize_topic
+from utils.misconceptions.analyzer import MisconceptionAnalyzer, normalize_topic
 
 
 def debug_variables_misconceptions():

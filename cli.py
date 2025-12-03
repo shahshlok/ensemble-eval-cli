@@ -23,7 +23,7 @@ from utils.grading import (
     load_question,
     load_rubric,
 )
-from utils.misconception_analyzer import MisconceptionAnalyzer
+from utils.misconceptions.analyzer import MisconceptionAnalyzer
 
 load_dotenv()
 

@@ -6,12 +6,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
 
-import utils.visualizations as viz
+import utils.analysis.visualizations as viz
 
 # Import from existing modules
 # Note: We import specific functions to reuse the logic in cli.py
 from cli import batch_grade_students, display_grading_results, get_student_list
-from utils.analytics import run_analysis
+from utils.analysis.analytics import run_analysis
 
 console = Console()
 

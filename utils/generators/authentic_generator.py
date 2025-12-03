@@ -11,7 +11,7 @@ import random
 from dataclasses import dataclass
 from pathlib import Path
 
-from utils.misconception_catalog import load_catalog
+from utils.misconceptions.catalog import load_catalog
 
 # =============================================================================
 # NAMES & DATA GENERATION

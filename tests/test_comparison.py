@@ -2,7 +2,7 @@ import json
 import os
 import unittest
 
-from utils.comparison_generator import (
+from utils.generators.comparison_generator import (
     generate_category_agreement,
     generate_category_insights,
     generate_pairwise_differences,

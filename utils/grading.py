@@ -14,7 +14,7 @@ from pydantic_models import (
     StudentFile,
     Submission,
 )
-from utils.openrouter_sdk import get_structured_response
+from utils.llm.openrouter import get_structured_response
 
 
 def parse_markdown_rubric(md_content: str) -> dict[str, Any]:
