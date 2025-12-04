@@ -33,13 +33,13 @@ def fuzzy_match_misconception(
 ) -> tuple[str | None, float, str]:
     """
     Attempt to match a detected misconception to ground truth using fuzzy matching.
-    
+
     Args:
         detected_name: The name from LLM detection
         detected_description: The description from LLM detection
         groundtruth: List of groundtruth misconception definitions
         threshold: Minimum score to consider a match
-        
+
     Returns:
         Tuple of (matched_id, confidence_score, match_method)
         Returns (None, 0.0, "no_match") if no match found above threshold
@@ -47,23 +47,23 @@ def fuzzy_match_misconception(
     best_match_id = None
     best_score = 0.0
     best_method = "no_match"
-    
+
     for gt in groundtruth:
         gt_id = gt.get("id", "")
         gt_name = gt.get("misconception_name", "")
         gt_explanation = gt.get("misconception_explanation", "")
         gt_student_thinking = gt.get("student_thinking", "")
-        
+
         # Method 1: Direct name matching
         name_seq_score = sequence_similarity(detected_name, gt_name)
         name_token_score = token_overlap(detected_name, gt_name)
         name_score = max(name_seq_score, name_token_score)
-        
+
         if name_score > best_score:
             best_score = name_score
             best_match_id = gt_id
             best_method = "name_match"
-        
+
         # Method 2: Description vs explanation matching
         if detected_description and gt_explanation:
             desc_score = token_overlap(detected_description, gt_explanation)
@@ -71,7 +71,7 @@ def fuzzy_match_misconception(
                 best_score = desc_score
                 best_match_id = gt_id
                 best_method = "description_match"
-        
+
         # Method 3: Check against student_thinking
         if detected_description and gt_student_thinking:
             thinking_score = token_overlap(detected_description, gt_student_thinking)
@@ -79,10 +79,10 @@ def fuzzy_match_misconception(
                 best_score = thinking_score
                 best_match_id = gt_id
                 best_method = "thinking_match"
-    
+
     if best_score >= threshold:
         return best_match_id, best_score, best_method
-    
+
     return None, best_score, "no_match"
 
 
@@ -93,23 +93,25 @@ def batch_fuzzy_match(
 ) -> list[dict[str, Any]]:
     """
     Match a batch of detections against ground truth.
-    
+
     Returns list of match results with detection info and match data.
     """
     results = []
     for detection in detections:
         name = detection.get("name", "")
         description = detection.get("description", "")
-        
+
         match_id, score, method = fuzzy_match_misconception(
             name, description, groundtruth, threshold
         )
-        
-        results.append({
-            "detection": detection,
-            "matched_id": match_id,
-            "match_score": score,
-            "match_method": method,
-        })
-    
+
+        results.append(
+            {
+                "detection": detection,
+                "matched_id": match_id,
+                "match_score": score,
+                "match_method": method,
+            }
+        )
+
     return results

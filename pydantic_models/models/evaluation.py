@@ -47,7 +47,7 @@ Top‑down structure of the final model:
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 # Canonical topics for misconception classification (from Assignment 2 rubric)
 # These are the actual learning objectives the assignment tests
@@ -70,9 +70,6 @@ class Config(BaseModel):
     rubric_prompt_id: str = Field(
         ..., description="ID of grading prompt template specific to this rubric/question"
     )
-
-
-
 
 
 class Evidence(BaseModel):

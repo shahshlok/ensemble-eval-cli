@@ -10,14 +10,10 @@ from pydantic_models import (
     EvaluationDocument,
     LLMEvaluationResponse,
     ModelEvaluation,
-
     StudentFile,
     Submission,
 )
 from utils.llm.openrouter import get_structured_response
-
-
-
 
 
 def load_student_submission(

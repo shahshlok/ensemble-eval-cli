@@ -33,7 +33,6 @@ from .models import (
 from .submission import StudentFile, Submission
 
 # Submission models
-from .submission import StudentFile, Submission
 
 __all__ = [
     # Root model

@@ -7,7 +7,6 @@ Results are saved per prompting strategy for comparative analysis.
 
 import asyncio
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -214,7 +213,7 @@ async def run_detection(
         "successful": 0,
         "skipped": 0,
         "errors": 0,
-        "total_misconceptions": {model: 0 for model in MODELS},
+        "total_misconceptions": dict.fromkeys(MODELS, 0),
     }
 
     with Progress(

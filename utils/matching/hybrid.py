@@ -4,14 +4,12 @@ misconception alignment.
 """
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from .fuzzy import fuzzy_match_misconception, token_overlap
 from .semantic import (
-    semantic_match_misconception,
     precompute_groundtruth_embeddings,
-    build_detection_text,
-    build_groundtruth_text,
+    semantic_match_misconception,
 )
 
 
@@ -87,7 +85,11 @@ def hybrid_match_misconception(
             name, description, belief, groundtruth, threshold=0.0
         )
         if fallback_id:
-            candidates[fallback_id] = {"fuzzy": 0.0, "semantic": fallback_sem_score, "method": "semantic_fallback"}
+            candidates[fallback_id] = {
+                "fuzzy": 0.0,
+                "semantic": fallback_sem_score,
+                "method": "semantic_fallback",
+            }
 
     best_id = None
     best_score = 0.0
@@ -111,7 +113,9 @@ def hybrid_match_misconception(
             best_prior = prior
             best_fuzzy = fuzzy_component
             best_sem = semantic_component
-            best_detail = f"fuzzy={fuzzy_component:.3f}, semantic={semantic_component:.3f}, prior={prior:.3f}"
+            best_detail = (
+                f"fuzzy={fuzzy_component:.3f}, semantic={semantic_component:.3f}, prior={prior:.3f}"
+            )
 
     return HybridMatchResult(
         matched_id=best_id,
@@ -124,7 +128,7 @@ def hybrid_match_misconception(
 
 
 def precompute_gt_embeddings_for_hybrid(
-    groundtruth: list[dict[str, Any]]
+    groundtruth: list[dict[str, Any]],
 ) -> dict[str, list[float]]:
     """Expose embedding precomputation to callers that want performance."""
     return precompute_groundtruth_embeddings(groundtruth)

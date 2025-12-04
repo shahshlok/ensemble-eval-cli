@@ -10,45 +10,48 @@ from .semantic import semantic_match_misconception
 
 class MatchResult(str, Enum):
     """Classification result for a detection."""
-    TRUE_POSITIVE = "true_positive"      # Found the injected misconception
-    FALSE_POSITIVE = "false_positive"    # Found misconception not injected (or in CLEAN file)
-    FALSE_NEGATIVE = "false_negative"    # Missed the injected misconception
-    INTERESTING = "interesting"          # FP that might be genuine (in CLEAN file)
+
+    TRUE_POSITIVE = "true_positive"  # Found the injected misconception
+    FALSE_POSITIVE = "false_positive"  # Found misconception not injected (or in CLEAN file)
+    FALSE_NEGATIVE = "false_negative"  # Missed the injected misconception
+    INTERESTING = "interesting"  # FP that might be genuine (in CLEAN file)
 
 
 @dataclass
 class ClassificationResult:
     """Result of classifying a single detection."""
+
     result: MatchResult
     detected_name: str
     detected_description: str
     expected_id: str | None  # The injected misconception ID (None if CLEAN)
-    matched_id: str | None   # What the detection matched to
+    matched_id: str | None  # What the detection matched to
     match_score: float
-    match_method: str        # fuzzy, semantic, or none
+    match_method: str  # fuzzy, semantic, or none
     model: str
     student: str
     question: str
     is_clean_file: bool
 
 
-@dataclass 
+@dataclass
 class StudentQuestionAnalysis:
     """Analysis for one student-question pair."""
+
     student: str
     question: str
     expected_id: str | None
     is_clean: bool
     classifications: list[ClassificationResult] = field(default_factory=list)
-    
+
     @property
     def has_true_positive(self) -> bool:
         return any(c.result == MatchResult.TRUE_POSITIVE for c in self.classifications)
-    
+
     @property
     def false_positive_count(self) -> int:
         return sum(1 for c in self.classifications if c.result == MatchResult.FALSE_POSITIVE)
-    
+
     @property
     def interesting_count(self) -> int:
         return sum(1 for c in self.classifications if c.result == MatchResult.INTERESTING)
@@ -67,7 +70,7 @@ def classify_detection(
 ) -> ClassificationResult:
     """
     Classify a single detection as TP, FP, FN, or Interesting.
-    
+
     Args:
         detection: The misconception detection from LLM
         expected_misconception_id: The ID that was injected (None if CLEAN)
@@ -78,28 +81,31 @@ def classify_detection(
         question: Question ID (Q1-Q4)
         fuzzy_threshold: Threshold for fuzzy matching
         semantic_threshold: Threshold for semantic matching
-        
+
     Returns:
         ClassificationResult with all details
     """
     detected_name = detection.get("name", "")
     detected_description = detection.get("description", "")
     detected_student_belief = detection.get("student_belief", "")
-    
+
     # Step 1: Try fuzzy matching
     matched_id, fuzzy_score, fuzzy_method = fuzzy_match_misconception(
         detected_name, detected_description, groundtruth, fuzzy_threshold
     )
-    
+
     match_score = fuzzy_score
     match_method = fuzzy_method
-    
+
     # Step 2: If fuzzy fails, try semantic matching
     if matched_id is None and semantic_threshold > 0:
         try:
             sem_matched_id, sem_score, sem_method = semantic_match_misconception(
-                detected_name, detected_description, detected_student_belief,
-                groundtruth, semantic_threshold
+                detected_name,
+                detected_description,
+                detected_student_belief,
+                groundtruth,
+                semantic_threshold,
             )
             if sem_matched_id is not None:
                 matched_id = sem_matched_id
@@ -107,7 +113,7 @@ def classify_detection(
                 match_method = sem_method
         except Exception:
             pass  # Semantic matching failed, stick with fuzzy result
-    
+
     # Step 3: Determine classification
     if is_clean_file:
         # Any detection in a CLEAN file is either FP or Interesting
@@ -121,7 +127,7 @@ def classify_detection(
     else:
         # Detection doesn't match what was injected
         result = MatchResult.FALSE_POSITIVE
-    
+
     return ClassificationResult(
         result=result,
         detected_name=detected_name,
@@ -149,7 +155,7 @@ def analyze_student_question(
 ) -> StudentQuestionAnalysis:
     """
     Analyze all model detections for a single student-question pair.
-    
+
     Args:
         detections_by_model: Dict mapping model name to list of detections
         expected_misconception_id: What was injected (None if CLEAN)
@@ -157,7 +163,7 @@ def analyze_student_question(
         groundtruth: Full groundtruth list
         student: Student ID
         question: Question ID
-        
+
     Returns:
         StudentQuestionAnalysis with all classifications
     """
@@ -167,7 +173,7 @@ def analyze_student_question(
         expected_id=expected_misconception_id,
         is_clean=is_clean_file,
     )
-    
+
     for model, detections in detections_by_model.items():
         for detection in detections:
             classification = classify_detection(
@@ -182,14 +188,14 @@ def analyze_student_question(
                 semantic_threshold=semantic_threshold,
             )
             analysis.classifications.append(classification)
-    
+
     return analysis
 
 
 def compute_metrics(analyses: list[StudentQuestionAnalysis]) -> dict[str, Any]:
     """
     Compute aggregate metrics from a list of analyses.
-    
+
     Returns dict with:
     - true_positives, false_positives, false_negatives counts
     - precision, recall, f1
@@ -200,21 +206,21 @@ def compute_metrics(analyses: list[StudentQuestionAnalysis]) -> dict[str, Any]:
     fp = 0
     fn = 0
     interesting = 0
-    
+
     model_stats: dict[str, dict[str, int]] = {}
-    
+
     for analysis in analyses:
         # Check for false negative (missed injection)
         if not analysis.is_clean and analysis.expected_id and not analysis.has_true_positive:
             fn += 1
-        
+
         for c in analysis.classifications:
             # Initialize model stats
             if c.model not in model_stats:
                 model_stats[c.model] = {"tp": 0, "fp": 0, "interesting": 0, "total": 0}
-            
+
             model_stats[c.model]["total"] += 1
-            
+
             if c.result == MatchResult.TRUE_POSITIVE:
                 tp += 1
                 model_stats[c.model]["tp"] += 1
@@ -224,12 +230,12 @@ def compute_metrics(analyses: list[StudentQuestionAnalysis]) -> dict[str, Any]:
             elif c.result == MatchResult.INTERESTING:
                 interesting += 1
                 model_stats[c.model]["interesting"] += 1
-    
+
     # Compute aggregate metrics
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    
+
     return {
         "true_positives": tp,
         "false_positives": fp,

@@ -18,7 +18,6 @@ import typer
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.text import Text
 
@@ -26,8 +25,6 @@ from analyze_cli import (
     ASSET_DIR,
     DEFAULT_GROUNDTRUTH_PATH,
     DEFAULT_MANIFEST_PATH,
-    JSON_EXPORT_PATH,
-    REPORT_PATH,
     bootstrap_metrics,
     build_dataframes,
     ensure_asset_dir,
@@ -79,7 +76,7 @@ async def run_pipeline_async(
 ) -> dict[str, Any]:
     """Run the entire pipeline in a single async context."""
     results = {"generation": None, "detection": {}, "analysis": {}}
-    
+
     # -------------------------------------------------------------------------
     # Step 1: Generate Dataset
     # -------------------------------------------------------------------------

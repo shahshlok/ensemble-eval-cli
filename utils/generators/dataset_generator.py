@@ -214,10 +214,10 @@ def generate_manifest(
 
     # Create student type assignments
     student_types: list[int] = (
-        [0] * n_perfect +      # 0 misconceptions
-        [1] * n_single +       # 1 misconception
-        [2] * n_struggling +   # 2 misconceptions
-        [3] * n_severe         # 3 misconceptions
+        [0] * n_perfect  # 0 misconceptions
+        + [1] * n_single  # 1 misconception
+        + [2] * n_struggling  # 2 misconceptions
+        + [3] * n_severe  # 3 misconceptions
     )
     random.shuffle(student_types)
 
@@ -256,7 +256,9 @@ def generate_manifest(
                         chosen = random.choice(applicable)
                         instructions = chosen.get("instructions", {}) or {}
                         specific = instruction_for_question(instructions, q)
-                        fallback = chosen.get("misconception_explanation") or chosen.get("misconception_name")
+                        fallback = chosen.get("misconception_explanation") or chosen.get(
+                            "misconception_name"
+                        )
                         files[q] = {
                             "type": "SEEDED",
                             "misconception_id": chosen.get("id"),
