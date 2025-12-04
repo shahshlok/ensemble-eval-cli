@@ -702,6 +702,44 @@ def plot_matcher_pr_scatter(metrics: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def plot_matcher_strategy_grid(metrics: pd.DataFrame, path: Path) -> Path:
+    """Grouped bar chart: F1 by strategy, grouped by matcher."""
+    if "match_mode" not in metrics.columns:
+        return path
+    
+    # Aggregate across models (average GPT + Gemini)
+    agg = metrics.groupby(["match_mode", "strategy"]).agg({
+        "f1": "mean"
+    }).reset_index()
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    strategies = ["baseline", "minimal", "rubric_only", "socratic"]
+    matchers = ["fuzzy_only", "semantic_only", "hybrid"]
+    x = np.arange(len(strategies))
+    width = 0.25
+    
+    colors = {"fuzzy_only": "#e74c3c", "semantic_only": "#3498db", "hybrid": "#2ecc71"}
+    
+    for i, matcher in enumerate(matchers):
+        data = agg[agg["match_mode"] == matcher]
+        vals = [data[data["strategy"] == s]["f1"].values[0] if len(data[data["strategy"] == s]) > 0 else 0 for s in strategies]
+        ax.bar(x + i*width, vals, width, label=matcher, color=colors[matcher])
+    
+    ax.set_ylabel("F1 Score")
+    ax.set_xlabel("Prompt Strategy")
+    ax.set_xticks(x + width)
+    ax.set_xticklabels(strategies)
+    ax.legend(title="Matcher")
+    ax.set_ylim(0, 0.8)
+    
+    plt.title("F1 by Matcher × Strategy (averaged across models)")
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
@@ -920,6 +958,9 @@ def generate_report(
             "### Precision-Recall by Matcher",
             f"![Matcher PR Scatter]({asset_paths.get('matcher_pr_scatter', '')})" if asset_paths.get("matcher_pr_scatter") else "",
             "",
+            "### Matcher × Strategy Distribution",
+            f"![Matcher Strategy Grid]({asset_paths.get('matcher_strategy_grid', '')})" if asset_paths.get("matcher_strategy_grid") else "",
+            "",
             "### Full Results Table",
             render_metrics_table(metrics, ci, include_match_mode=True),
             "",
@@ -1117,6 +1158,7 @@ def main(
     if match_mode == MatchMode.ALL:
         asset_paths["matcher_ablation"] = ASSET_DIR / "matcher_ablation.png"
         asset_paths["matcher_pr_scatter"] = ASSET_DIR / "matcher_pr_scatter.png"
+        asset_paths["matcher_strategy_grid"] = ASSET_DIR / "matcher_strategy_grid.png"
         
         # Filter to hybrid for topic-related plots and misconception analysis
         hybrid_opps = opportunities_df[opportunities_df["match_mode"] == "hybrid"]
@@ -1134,6 +1176,7 @@ def main(
         # Ablation-specific plots
         plot_matcher_ablation(metrics, asset_paths["matcher_ablation"])
         plot_matcher_pr_scatter(metrics, asset_paths["matcher_pr_scatter"])
+        plot_matcher_strategy_grid(metrics, asset_paths["matcher_strategy_grid"])
         
         # For strategy/model comparison, filter to hybrid
         hybrid_metrics = metrics[metrics["match_mode"] == "hybrid"].copy()

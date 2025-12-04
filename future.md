@@ -118,3 +118,12 @@ Keeping it simple allows cleaner metrics and easier interpretation.
 4. Difficulty labels (data-driven, post-hoc, using synthetic performance)
 5. Confidence calibration (once we trust the numbers)
 6. Multiple misconceptions per file
+
+
+
+
+So the 3 things to do are and in no particular order:
+  1. Storage system
+  2. Multiple assignments
+  3. multiple seeded pipeline runs per assignment
+  4. Per misconception analysis to find what misconceptions are easily caught by the models and which ones are not .
