@@ -69,18 +69,6 @@ Keeping it simple allows cleaner metrics and easier interpretation.
 
 ---
 
-## 5. Additional Models and Fine-Tuning
-
-**Current status:** Two models (GPT-5.1, Gemini 2.5 Flash) with zero-shot prompting.
-
-**Future direction:**
-- Add more models (Claude, Llama, Mistral)
-- Experiment with few-shot prompting
-- Fine-tune a smaller model on misconception detection
-- Compare cost/performance tradeoffs
-
----
-
 ## 6. Broader Misconception Taxonomy
 
 **Current status:** ~15 misconceptions focused on input/output, types, and basic arithmetic.
@@ -132,3 +120,5 @@ So the 3 things to do are and in no particular order:
           - Summarizes patterns across runs and assignments.
           - Pulls out the key per-misconception and per-topic findings that are stable.
           - Connects them to CS ed literature.
+
+Potential recall

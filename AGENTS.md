@@ -65,8 +65,18 @@ The system is structured into three conceptual stages:
 
 **Critical Reporting Rule: The "Honest N-Count"**
 To avoid statistical inflation, we distinguish between **Instance Performance** and **Model Reliability**:
-*   **Unique File Recall (Potential Recall):** Of the $N$ unique files containing Error X, how many were found by *at least one* model? (Measures *detectability*).
-*   **Average Recall:** Of all $N \times M$ runs, how often was it found? (Measures *reliability*).
+
+*   **Potential Recall (Unique File Recall):** Measures *Competence / Detectability*.
+    *   *Definition:* Of the $N$ unique files containing Error X, what percentage were found by *at least one* model/strategy combination?
+    *   *Goal:* Defines the "Diagnostic Ceiling" — the theoretical upper bound of the system.
+
+*   **Average Recall:** Measures *Reliability*.
+    *   *Definition:* Of all $N \times M$ inference runs, what percentage successfully found the error?
+
+*   **Consistency:** Measures *Stability*.
+    *   *Definition:* $\text{Consistency} = \frac{\text{Average Recall}}{\text{Potential Recall}}$.
+    *   *Goal:* Distinguishes between "blindness" (Potential Recall $\approx$ 0) and "flakiness" (High Potential, Low Average).
+
 *   **N-Count Reporting:** Always report $N$ as the number of *unique student submissions*, not the number of model inference runs.
 
 **The "Prompting Paradox"**
