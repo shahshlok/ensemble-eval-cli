@@ -38,19 +38,43 @@ DEFAULT_STUDENT_COUNT = 60
 DEFAULT_OUTPUT_ROOT = Path("authentic_seeded")
 DEFAULT_MANIFEST_PATH = DEFAULT_OUTPUT_ROOT / "manifest.json"
 
-QUESTION_FILES = {
-    "Q1": Path("data/a2/q1.md"),
-    "Q2": Path("data/a2/q2.md"),
-    "Q3": Path("data/a2/q3.md"),
-    "Q4": Path("data/a2/q4.md"),
+# Assignment-specific question files and briefs
+ASSIGNMENTS = {
+    "a2": {
+        "question_files": {
+            "Q1": Path("data/a2/q1.md"),
+            "Q2": Path("data/a2/q2.md"),
+            "Q3": Path("data/a2/q3.md"),
+            "Q4": Path("data/a2/q4.md"),
+        },
+        "question_briefs": {
+            "Q1": "Acceleration: compute (v1 - v0) / t using user input.",
+            "Q2": "Road trip cost: (distance / mpg) * price using user input.",
+            "Q3": "Distance between two points using sqrt((x2-x1)^2 + (y2-y1)^2).",
+            "Q4": "Triangle area with Heron's formula; sides from point distances (Q3 logic).",
+        },
+        "groundtruth": Path("data/a2/groundtruth.json"),
+    },
+    "a3": {
+        "question_files": {
+            "Q1": Path("data/a3/q1.md"),
+            "Q2": Path("data/a3/q2.md"),
+            "Q3": Path("data/a3/q3.md"),
+            "Q4": Path("data/a3/q4.md"),
+        },
+        "question_briefs": {
+            "Q1": "Sum of Even Numbers: read 5 ints, sum only evens.",
+            "Q2": "Number Guessing Game: while loop until correct guess.",
+            "Q3": "Grade Calculator: if-else chain for letter grades.",
+            "Q4": "Right Triangle: nested loops to print asterisk pattern.",
+        },
+        "groundtruth": Path("data/a3/groundtruth.json"),
+    },
 }
 
-QUESTION_BRIEFS = {
-    "Q1": "Acceleration: compute (v1 - v0) / t using user input.",
-    "Q2": "Road trip cost: (distance / mpg) * price using user input.",
-    "Q3": "Distance between two points using sqrt((x2-x1)^2 + (y2-y1)^2).",
-    "Q4": "Triangle area with Heron's formula; sides from point distances (Q3 logic).",
-}
+# Legacy aliases for backward compatibility
+QUESTION_FILES = ASSIGNMENTS["a2"]["question_files"]
+QUESTION_BRIEFS = ASSIGNMENTS["a2"]["question_briefs"]
 
 PERSONAS = [
     "Single-letter variables, minimal whitespace, no comments.",
@@ -129,10 +153,13 @@ def choose_str(label: str, default: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def load_question_texts() -> dict[str, str]:
-    """Load full markdown for Q1-Q4 from disk."""
+def load_question_texts(assignment: str = "a2") -> dict[str, str]:
+    """Load full markdown for Q1-Q4 from disk for the specified assignment."""
+    if assignment not in ASSIGNMENTS:
+        raise ValueError(f"Unknown assignment: {assignment}. Valid: {list(ASSIGNMENTS.keys())}")
+    question_files = ASSIGNMENTS[assignment]["question_files"]
     texts: dict[str, str] = {}
-    for q, path in QUESTION_FILES.items():
+    for q, path in question_files.items():
         if not path.exists():
             raise FileNotFoundError(f"Missing question prompt: {path}")
         texts[q] = path.read_text(encoding="utf-8").strip()
@@ -191,6 +218,7 @@ def generate_manifest(
     question_texts: dict[str, str],
     seed: int,
     student_count: int = DEFAULT_STUDENT_COUNT,
+    assignment: str = "a2",
 ) -> dict[str, Any]:
     """Construct the manifest structure.
 
@@ -205,6 +233,10 @@ def generate_manifest(
     random.seed(seed)
     faker = Faker()
     faker.seed_instance(seed)
+
+    # Get assignment-specific config
+    question_briefs = ASSIGNMENTS[assignment]["question_briefs"]
+    questions = list(ASSIGNMENTS[assignment]["question_files"].keys())
 
     # Calculate student counts per category
     n_perfect = int(student_count * 0.40)
@@ -223,7 +255,6 @@ def generate_manifest(
 
     used_ids = set()
     students: list[dict[str, Any]] = []
-    questions = list(QUESTION_FILES.keys())
 
     for misconception_count in student_types:
         first = faker.first_name()
@@ -264,6 +295,7 @@ def generate_manifest(
                             "misconception_id": chosen.get("id"),
                             "misconception_name": chosen.get("misconception_name"),
                             "instruction": specific or fallback,
+                            "student_thinking": chosen.get("student_thinking", ""),
                         }
                         assigned_misconception_ids.append(chosen.get("id"))
                     else:
@@ -289,8 +321,9 @@ def generate_manifest(
         "generated_at": datetime.utcnow().isoformat(),
         "seed": seed,
         "student_count": student_count,
+        "assignment": assignment,
         "model": DEFAULT_MODEL,
-        "questions": QUESTION_BRIEFS,
+        "questions": question_briefs,
         "question_texts": question_texts,
         "students": students,
     }
@@ -348,14 +381,19 @@ def build_messages(
     )
 
     instruction = file_entry.get("instruction") or "Introduce the specified conceptual error."
+    student_thinking = file_entry.get("student_thinking") or ""
 
     if file_entry["type"] == "SEEDED":
+        thinking_section = ""
+        if student_thinking:
+            thinking_section = f"\nYour mindset as this student: {student_thinking}\n"
         user = (
             f"Question {question}: {brief}\n\n"
             f"Full assignment text:\n{question_text}\n\n"
             "Write a solution for this question. "
             "You must include the following specific conceptual error:\n"
-            f"{instruction}\n\n"
+            f"{instruction}"
+            f"{thinking_section}\n"
             "Keep the style consistent with the given persona. Output only the Java code."
         )
     else:
@@ -493,31 +531,36 @@ async def run_generation(
 
 @app.command()
 def manifest(
-    misconceptions_path: Path = typer.Option(
-        Path("data/a2/groundtruth.json"),
-        help="Path to misconceptions JSON.",
+    assignment: str = typer.Option(
+        "a2",
+        help="Assignment to generate for (a2 or a3).",
     ),
     manifest_path: Path = typer.Option(
-        DEFAULT_MANIFEST_PATH,
-        help="Where to write the manifest.",
+        None,
+        help="Where to write the manifest. Defaults to authentic_seeded/<assignment>/manifest.json.",
     ),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to simulate."),
     seed: int | None = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
     force: bool = typer.Option(False, help="Overwrite existing manifest if present."),
 ):
     """Generate manifest.json only."""
+    if assignment not in ASSIGNMENTS:
+        console.print(f"[red]Unknown assignment: {assignment}. Valid: {list(ASSIGNMENTS.keys())}[/red]")
+        raise typer.Exit(1)
+    if manifest_path is None:
+        manifest_path = DEFAULT_OUTPUT_ROOT / assignment / "manifest.json"
     if seed is None:
         seed = int(datetime.utcnow().timestamp())
-    question_texts = load_question_texts()
-    misconceptions = load_misconceptions(misconceptions_path)
-    data = generate_manifest(misconceptions, question_texts, seed=seed, student_count=students)
+    question_texts = load_question_texts(assignment)
+    misconceptions = load_misconceptions(ASSIGNMENTS[assignment]["groundtruth"])
+    data = generate_manifest(misconceptions, question_texts, seed=seed, student_count=students, assignment=assignment)
     write_manifest(data, manifest_path, force=force)
 
 
 @app.command()
 def generate(
     manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Path to manifest.json."),
-    output_root: Path = typer.Option(DEFAULT_OUTPUT_ROOT, help="Root output directory."),
+    output_root: Path = typer.Option(None, help="Root output directory. Auto-detected from manifest if not set."),
     model: str = typer.Option(DEFAULT_MODEL, help="OpenAI model to use."),
     concurrency: int = typer.Option(20, help="Max concurrent requests (0 or 1 for sequential)."),
     dry_run: bool = typer.Option(False, help="Skip API calls and file writes."),
@@ -525,18 +568,27 @@ def generate(
     """Generate Java files from an existing manifest."""
     if not manifest_path.exists():
         raise FileNotFoundError(f"Manifest not found at {manifest_path}")
+    # Auto-detect output_root from manifest parent if not specified
+    if output_root is None:
+        output_root = manifest_path.parent
     asyncio.run(run_generation(manifest_path, output_root, model, concurrency, dry_run=dry_run))
     console.print("[green]Generation complete[/green]")
 
 
 @app.command()
 def run(
-    misconceptions_path: Path = typer.Option(
-        Path("data/a2/groundtruth.json"),
-        help="Path to misconceptions JSON.",
+    assignment: str = typer.Option(
+        "a2",
+        help="Assignment to generate for (a2 or a3).",
     ),
-    manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Where to write the manifest."),
-    output_root: Path = typer.Option(DEFAULT_OUTPUT_ROOT, help="Root output directory."),
+    manifest_path: Path = typer.Option(
+        None,
+        help="Where to write the manifest. Defaults to authentic_seeded/<assignment>/manifest.json.",
+    ),
+    output_root: Path = typer.Option(
+        None,
+        help="Root output directory. Defaults to authentic_seeded/<assignment>/.",
+    ),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to simulate."),
     seed: int | None = typer.Option(None, help="Random seed. Defaults to current UNIX time."),
     model: str = typer.Option(DEFAULT_MODEL, help="OpenAI model to use."),
@@ -545,11 +597,18 @@ def run(
     dry_run: bool = typer.Option(False, help="Skip API calls and file writes."),
 ):
     """Full pipeline: manifest then generation."""
+    if assignment not in ASSIGNMENTS:
+        console.print(f"[red]Unknown assignment: {assignment}. Valid: {list(ASSIGNMENTS.keys())}[/red]")
+        raise typer.Exit(1)
+    if manifest_path is None:
+        manifest_path = DEFAULT_OUTPUT_ROOT / assignment / "manifest.json"
+    if output_root is None:
+        output_root = DEFAULT_OUTPUT_ROOT / assignment
     if seed is None:
         seed = int(datetime.utcnow().timestamp())
-    question_texts = load_question_texts()
-    misconceptions = load_misconceptions(misconceptions_path)
-    data = generate_manifest(misconceptions, question_texts, seed=seed, student_count=students)
+    question_texts = load_question_texts(assignment)
+    misconceptions = load_misconceptions(ASSIGNMENTS[assignment]["groundtruth"])
+    data = generate_manifest(misconceptions, question_texts, seed=seed, student_count=students, assignment=assignment)
     write_manifest(data, manifest_path, force=force)
     asyncio.run(run_generation(manifest_path, output_root, model, concurrency, dry_run=dry_run))
     console.print("[green]Full pipeline complete[/green]")
