@@ -44,4 +44,8 @@ Current findings suggest LLMs struggle with variable state (e.g., `v1` vs `v0`).
 - **Average Recall (The Reliability):** The standard mean recall across all runs. Measures how likely a single agent is to succeed.
 - **Consistency:** Measures stability. If we run the same model multiple times (or different models), do they agree? quantifying the "noise" in LLM grading.
 
+
+### 4. Rubric Bias Experiment
+Does removing the rubric cause LLMs to perform better on deep misconceptions?
+
 ---
