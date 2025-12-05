@@ -1274,6 +1274,47 @@ def render_hallucination_snippets(df: pd.DataFrame, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def compute_misconception_recall(
+    opportunities: pd.DataFrame, groundtruth: list[dict[str, Any]]
+) -> pd.DataFrame:
+    """
+    Compute recall per misconception ID.
+    Returns a DataFrame with columns: expected_id, name, category, recall, n
+    sorted by recall (hardest to detect first).
+    """
+    if opportunities.empty or "expected_id" not in opportunities.columns:
+        return pd.DataFrame()
+
+    # Build a lookup from misconception ID to name/category
+    gt_lookup = {}
+    for m in groundtruth:
+        mid = m.get("id", "")
+        gt_lookup[mid] = {
+            "name": m.get("name", mid),
+            "category": m.get("category", "Unknown"),
+        }
+
+    # Group by expected_id and compute recall
+    stats = (
+        opportunities.groupby("expected_id")
+        .agg(recall=("success", "mean"), n=("success", "count"))
+        .reset_index()
+    )
+
+    # Add name and category from groundtruth
+    stats["name"] = stats["expected_id"].apply(
+        lambda x: gt_lookup.get(x, {}).get("name", x)
+    )
+    stats["category"] = stats["expected_id"].apply(
+        lambda x: gt_lookup.get(x, {}).get("category", "Unknown")
+    )
+
+    # Sort by recall (hardest first)
+    stats = stats.sort_values("recall").reset_index(drop=True)
+
+    return stats
+
+
 def render_misconception_table(stats: pd.DataFrame) -> str:
     """Render markdown table of per-misconception recall."""
     if stats.empty:

@@ -35,16 +35,19 @@ from analyze_cli import (
     generate_run_id,
     load_groundtruth,
     load_manifest,
+    plot_confidence_calibration_distribution,
     plot_hallucinations,
     plot_matcher_ablation,
     plot_matcher_pr_scatter,
     plot_matcher_strategy_grid,
     plot_misconception_recall_bars,
+    plot_model_agreement_matrix,
     plot_model_comparison,
     plot_precision_recall_scatter,
     plot_strategy_f1_comparison,
     plot_topic_heatmap,
     plot_topic_recall_bars,
+    plot_topic_recall_by_model,
     save_run,
     summarize_metrics,
 )
@@ -245,6 +248,10 @@ async def run_pipeline_async(
             "matcher_ablation": ASSET_DIR / "matcher_ablation.png",
             "matcher_pr_scatter": ASSET_DIR / "matcher_pr_scatter.png",
             "matcher_strategy_grid": ASSET_DIR / "matcher_strategy_grid.png",
+            # New visualizations
+            "topic_recall_by_model": ASSET_DIR / "topic_recall_by_model.png",
+            "model_agreement_matrix": ASSET_DIR / "model_agreement_matrix.png",
+            "confidence_calibration": ASSET_DIR / "confidence_calibration.png",
         }
 
         # Filter to hybrid for topic-related plots
@@ -271,6 +278,11 @@ async def run_pipeline_async(
             plot_strategy_f1_comparison(hybrid_metrics, asset_paths["strategy_f1"])
             plot_precision_recall_scatter(hybrid_metrics, asset_paths["pr_scatter"])
             plot_model_comparison(hybrid_metrics, asset_paths["model_comparison"])
+
+        # New visualizations (use hybrid data)
+        plot_topic_recall_by_model(hybrid_opps, asset_paths["topic_recall_by_model"])
+        plot_model_agreement_matrix(hybrid_opps, asset_paths["model_agreement_matrix"])
+        plot_confidence_calibration_distribution(hybrid_dets, asset_paths["confidence_calibration"])
 
         # Build asset paths for run-local report
         run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
