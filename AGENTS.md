@@ -10,24 +10,19 @@ The primary user is working toward a **Bachelor’s honours thesis** and a publi
 
 ---
 
-## 1. High-Level Goal
+## 1. Research Goal & Thesis
 
-Design and evaluate a framework where **LLMs act as misconception detectors** for CS1 code submissions.
+**Current Thesis Statement:**
+"We conducted a controlled ablation study to define the 'Diagnostic Ceiling' of modern LLMs. We prove that while LLMs have solved Syntax/API misconceptions (approaching 100% recall), they remain statistically incompetent at diagnosing State/Logic flow (often <25% recall), regardless of model size or prompting strategy. Furthermore, complex pedagogical prompting (e.g., Socratic) often degrades diagnostic performance compared to zero-shot classification."
 
-Concretely:
-- Given a taxonomy of misconceptions (e.g., Scanner misuse, integer division, state/variable misunderstandings) and a program submission,
-- Use LLMs (GPT-5.1, Gemini 2.5 Flash, and future models) to:
-  1. Read the student’s code,
-  2. Describe any misconceptions they detect,
-  3. Map those descriptions to the taxonomy,
-  4. Evaluate how accurately and reliably they do so.
+**Key Research Questions:**
+1.  **Diagnostic Ceiling:** What is the theoretical upper bound of LLM detection capabilities on controlled (seeded) data?
+2.  **Failure Boundaries:** Exactly *which* types of misconceptions are invisible to LLMs (e.g., State vs. Syntax)?
+3.  **The Prompting Paradox:** Why do simpler prompts often outperform complex "Socratic" or role-playing prompts?
+4.  **Generalizability:** Do these failure patterns hold across different assignments (Kinematics vs. String Processing)?
 
-Short-term and long-term focus: **synthetic data only**, where we inject known misconceptions into LLM-generated CS1 programs, so we can tightly control:
-- Which misconception is present in each file.
-- Distribution of seeded vs clean files.
-- Assignments and prompts.
-
-By explicit design choice from the primary user, this project will **never use real student submissions**; all experiments are synthetic, though they are intended to approximate CS1 contexts as faithfully as possible.
+**Strategy:**
+This project uses **synthetic data** as a form of *Controlled Sensitivity Analysis*. By injecting known errors, we measure the model's ability to find them. If it fails on these clear, seeded examples, it will certainly fail on ambiguous real-world data.
 
 ---
 
@@ -39,83 +34,52 @@ The system is structured into three conceptual stages:
    - Files: `utils/generators/dataset_generator.py`, `authentic_seeded/manifest.json`, `data/a2/groundtruth.json`.
    - Uses a misconception taxonomy (`groundtruth.json`) and assignment texts to:
      - Generate a manifest of which student gets which misconception on which question (or a clean file).
-     - Ask an LLM to generate 60 student “personas” and their code submissions (synthetic CS1 solutions) with injected misconceptions.
+     - Ask an LLM to generate 60-100 student “personas” and their code submissions (synthetic CS1 solutions) with injected misconceptions.
    - Key constraints:
-     - ~60 students × 4 questions = 240 files.
-     - ~20–25% seeded files, remainder clean.
      - **One injected misconception per file** (for simpler evaluation).
+     - Realistic grade distribution (40% Perfect, 35% Single-Issue, 20% Struggling, 5% Severe).
 
 2. **Detection**
    - Files: `llm_miscons_cli.py`, `detections/`.
    - For each student+question, and for each prompting strategy (baseline, minimal, rubric_only, socratic), the system:
-     - Calls LLMs (currently GPT-5.1 and Gemini 2.5 Flash).
+     - Calls LLMs (currently GPT-5.1, Gemini 2.5 Flash, Claude Haiku 4.5).
      - Asks them to detect and describe misconceptions in the code.
      - Stores detection JSONs under `detections/<strategy>/student_question.json`.
-   - Each detection includes detailed fields:
-     - `name`, `description`, `student_belief`, `correct_understanding`, `symptoms`, `root_cause`, `remediation_hint`, `evidence`, `confidence`, etc.
 
 3. **Alignment + Evaluation**
    - Files: `analyze_cli.py`, `utils/matching/{fuzzy.py,semantic.py,hybrid.py}`, `thesis_report.md`.
    - **Alignment (matcher)**:
-     - Maps each LLM detection onto the ground-truth taxonomy using different matchers:
-       - `fuzzy_only`: string-based similarity on names/descriptions.
-       - `semantic_only`: embedding-based similarity (OpenAI `text-embedding-3-*` or similar).
-       - `hybrid`: current fusion of fuzzy + semantic + topic prior.
-     - Uses `match_mode` (fuzzy_only, semantic_only, hybrid, all) to run matcher ablation.
+     - Maps each LLM detection onto the ground-truth taxonomy.
+     - **Findings:** Fuzzy matching is near-useless; Semantic/Hybrid matching is required for this task.
    - **Evaluation**:
      - Builds tidy dataframes of detections + “opportunities” (seeded misconceptions).
      - Computes metrics per (strategy, model[, match_mode]):
        - True positives / false positives / false negatives.
        - Precision, recall, F1 with bootstrap confidence intervals.
        - Topic-wise recall (Input, State / Variables, Data Types, etc.).
-       - Hallucination analysis (recurring FPs that don’t map to known IDs).
-       - Agreement between models via Cohen’s κ and McNemar tests.
-     - Generates a markdown report (`thesis_report.md`) and assets in `docs/report_assets/`.
+       - **Hallucination analysis** (recurring FPs that don’t map to known IDs).
 
 ---
 
-## 3. Current Status (What’s Implemented)
+## 3. Methodology Standards
 
-- **Synthetic dataset**:
-  - 60 students × 4 questions (Assignment A2: CS1 kinematics-like problem).
-  - Manifest-driven injection of ~15–18 misconceptions, one per seeded file.
-  - ~54 seeded files, ~186 clean files (~22.5% seeded).
+**Critical Reporting Rule: The "Honest N-Count"**
+To avoid statistical inflation, we distinguish between **Instance Performance** and **Model Reliability**:
+*   **Unique File Recall (Potential Recall):** Of the $N$ unique files containing Error X, how many were found by *at least one* model? (Measures *detectability*).
+*   **Average Recall:** Of all $N \times M$ runs, how often was it found? (Measures *reliability*).
+*   **N-Count Reporting:** Always report $N$ as the number of *unique student submissions*, not the number of model inference runs.
 
-- **LLM detectors**:
-  - GPT-5.1 and Gemini 2.5 Flash via OpenAI or compatible APIs.
-  - Multiple prompting strategies (baseline, minimal, rubric_only, socratic).
-
-- **Matchers** (with ablation):
-  - `fuzzy_only` – naive string similarity; currently performs very poorly (F1 ≈ 0.05).
-  - `semantic_only` – embedding-based semantic similarity; performs reasonably well (F1 ≈ 0.6).
-  - `hybrid` – fuzzy + semantic + topic prior; roughly similar performance to semantic-only on current data.
-
-- **Analysis/reporting**:
-  - Per (strategy, model, match_mode) P/R/F1 with bootstrap CIs.
-  - Topic-wise recall; heatmaps and bar charts.
-  - Hallucination plots (top hallucinated misconception names).
-  - Matcher ablation section in `thesis_report.md`.
-  - Agreement metrics (κ, McNemar) between GPT and Gemini.
+**The "Prompting Paradox"**
+We have observed that simpler prompts often outperform complex "Socratic" or role-playing prompts. This is a key finding. We do not "fix" this by forcing complex prompts to work; we report it as a limitation of current LLMs in pedagogical contexts.
 
 ---
 
-## 4. Research Intent & Target Venues
+## 4. Roadmap
 
-The end goal is to produce:
-
-1. A **thesis-level** body of work showing:
-   - That an LLM + matcher pipeline can detect many seeded misconceptions in CS1-style code.
-   - Where it fails (by topic/misconception type).
-   - How different matchers and prompting strategies affect behavior.
-
-2. A **publishable paper** at a top CS education venue, initially targeting:
-   - **ITiCSE** (International Conference on Innovation and Technology in Computer Science Education).
-   - Possibly later: **SIGCSE Technical Symposium**, **Learning@Scale**, or similar venues.
-
-The expected contribution is a mix of:
-- A reusable **evaluation framework** (architecture + tooling).
-- A **matcher study** showing the necessity of semantic similarity (vs naive string matching) for this task.
-- **Insights about which misconception types LLMs find easy vs hard**, and what this reveals about their understanding of code and CS1 concepts.
+1.  **Metric Refinement:** Implement "Unique File Recall" and "Consistency" metrics to accurately report current performance without inflation.
+2.  **Scale:** Run the full pipeline on **100 students** (Seed 2025) to establish a solid statistical baseline on Assignment 2 (Kinematics).
+3.  **Generalize:** Introduce **Assignment 3** (e.g., Arrays/Strings) to test if the "State vs. Syntax" failure mode is universal.
+4.  **Analyze:** Finalize the thesis report with the "Failure Boundaries" narrative.
 
 ---
 
@@ -145,7 +109,7 @@ Agents working here should assume:
 - `pipeline.py`
   - Orchestrates end-to-end runs: dataset generation → detection → analysis.
   - Typical usage:
-    - `uv run pipeline run --students 60 --strategies all --force --yes`
+    - `uv run pipeline run --students 100 --strategies all --force --yes`
 
 - `analyze_cli.py`
   - Runs analysis/matcher ablation on existing detections.
@@ -156,12 +120,6 @@ Agents working here should assume:
 - `thesis_report.md`
   - The main markdown report summarizing quantitative results and key takeaways.
   - Generated by `analyze_cli.py` or the analysis step in `pipeline.py`.
-
-- `plan.md`
-  - The *current* high-level plan; often focused on matcher ablation and next experimental steps.
-
-- `future.md`
-  - Deferred ideas and long-term directions (real data, broader taxonomy, confidence calibration, multi-misconception files, etc.).
 
 ---
 
