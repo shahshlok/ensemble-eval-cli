@@ -888,6 +888,277 @@ def plot_matcher_strategy_grid(metrics: pd.DataFrame, path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# New Visualizations: Topic Recall by Model, Agreement Matrix, Confidence Calibration
+# ---------------------------------------------------------------------------
+def plot_topic_recall_by_model(opportunities: pd.DataFrame, path: Path) -> Path:
+    """
+    Grouped bar chart showing recall by topic, grouped by model.
+    X=Topic, Y=Recall, Group=Model.
+    Reveals model-specific strengths/weaknesses per topic.
+    """
+    if opportunities.empty:
+        return path
+
+    # Compute recall per (topic, model)
+    topic_model_stats = (
+        opportunities.groupby(["topic", "model"])
+        .agg(recall=("success", "mean"), n=("success", "count"))
+        .reset_index()
+    )
+    topic_model_stats["model_short"] = topic_model_stats["model"].apply(lambda m: m.split("/")[-1])
+
+    # Get unique topics and models
+    topics = sorted(topic_model_stats["topic"].unique())
+    models = sorted(topic_model_stats["model_short"].unique())
+    n_models = len(models)
+    n_topics = len(topics)
+
+    if n_topics == 0 or n_models == 0:
+        return path
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(max(12, n_topics * 1.5), 7))
+
+    x = np.arange(n_topics)
+    total_width = 0.8
+    width = total_width / n_models
+
+    # Dynamic colors
+    model_colors = get_model_colors(models)
+
+    for i, model in enumerate(models):
+        model_data = topic_model_stats[topic_model_stats["model_short"] == model]
+        recalls = []
+        for topic in topics:
+            topic_row = model_data[model_data["topic"] == topic]
+            if not topic_row.empty:
+                recalls.append(topic_row["recall"].values[0])
+            else:
+                recalls.append(0)
+
+        offset = (i - (n_models - 1) / 2) * width
+        bars = ax.bar(
+            x + offset,
+            recalls,
+            width,
+            label=model,
+            color=model_colors.get(model, "#999"),
+            alpha=0.85,
+        )
+
+    ax.set_xlabel("Topic", fontsize=11)
+    ax.set_ylabel("Recall", fontsize=11)
+    ax.set_title("Topic Recall by Model", fontsize=13, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(topics, rotation=30, ha="right", fontsize=9)
+    ax.set_ylim(0, 1.05)
+    ax.axhline(y=0.5, color="gray", linestyle="--", alpha=0.5, linewidth=1)
+    ax.legend(title="Model", loc="upper right")
+    ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
+def plot_model_agreement_matrix(opportunities: pd.DataFrame, path: Path) -> Path:
+    """
+    Heatmap showing pairwise Cohen's Kappa between models.
+    Visual evidence of whether models make correlated or complementary errors.
+    """
+    if opportunities.empty:
+        return path
+
+    # Get unique models
+    models = sorted(opportunities["model"].unique())
+    n_models = len(models)
+
+    if n_models < 2:
+        return path
+
+    # Build agreement matrix
+    kappa_matrix = np.zeros((n_models, n_models))
+    model_short_names = [m.split("/")[-1] for m in models]
+
+    for i, model_a in enumerate(models):
+        for j, model_b in enumerate(models):
+            if i == j:
+                kappa_matrix[i, j] = 1.0  # Perfect agreement with self
+            elif i < j:
+                # Get success lists for both models on same (student, question) pairs
+                a_data = opportunities[opportunities["model"] == model_a].copy()
+                b_data = opportunities[opportunities["model"] == model_b].copy()
+
+                # Merge on student+question to align
+                merged = a_data.merge(
+                    b_data[["student", "question", "success"]],
+                    on=["student", "question"],
+                    suffixes=("_a", "_b"),
+                )
+
+                if not merged.empty:
+                    success_a = merged["success_a"].tolist()
+                    success_b = merged["success_b"].tolist()
+                    kappa = cohen_kappa(success_a, success_b)
+                    kappa_matrix[i, j] = kappa
+                    kappa_matrix[j, i] = kappa  # Symmetric
+
+    # Create heatmap
+    fig, ax = plt.subplots(figsize=(max(6, n_models * 1.5), max(5, n_models * 1.2)))
+
+    mask = np.zeros_like(kappa_matrix, dtype=bool)
+    # Optionally mask the diagonal for cleaner look
+    # np.fill_diagonal(mask, True)
+
+    sns.heatmap(
+        kappa_matrix,
+        annot=True,
+        fmt=".3f",
+        cmap="RdYlGn",
+        vmin=-0.2,
+        vmax=1.0,
+        xticklabels=model_short_names,
+        yticklabels=model_short_names,
+        square=True,
+        ax=ax,
+        cbar_kws={"label": "Cohen's κ"},
+        mask=mask,
+    )
+
+    ax.set_title("Model Agreement Matrix (Cohen's κ)", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Model", fontsize=11)
+    ax.set_ylabel("Model", fontsize=11)
+
+    # Add interpretation guide
+    fig.text(
+        0.5,
+        -0.02,
+        "κ interpretation: <0.2 slight, 0.2-0.4 fair, 0.4-0.6 moderate, 0.6-0.8 substantial, >0.8 near-perfect",
+        ha="center",
+        fontsize=9,
+        style="italic",
+        color="gray",
+    )
+
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close()
+    return path
+
+
+def plot_confidence_calibration_distribution(detections: pd.DataFrame, path: Path) -> Path:
+    """
+    Overlaid histograms/density plots of confidence scores for TP vs FP.
+    Reveals whether model confidence can be trusted (e.g., "Is model uncertain when it hallucinates?").
+    """
+    if detections.empty:
+        return path
+
+    # Filter to TP and FP only (these have confidence scores)
+    tp_fp = detections[
+        detections["result"].isin(
+            [MatchResult.TRUE_POSITIVE.value, MatchResult.FALSE_POSITIVE.value]
+        )
+    ].copy()
+    tp_fp = tp_fp.dropna(subset=["confidence"])
+
+    if tp_fp.empty or len(tp_fp) < 10:
+        return path
+
+    tp_conf = tp_fp[tp_fp["result"] == MatchResult.TRUE_POSITIVE.value]["confidence"].clip(0, 1)
+    fp_conf = tp_fp[tp_fp["result"] == MatchResult.FALSE_POSITIVE.value]["confidence"].clip(0, 1)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Left: Overlaid histograms
+    ax1 = axes[0]
+    bins = np.linspace(0, 1, 21)
+
+    if len(tp_conf) > 0:
+        ax1.hist(
+            tp_conf,
+            bins=bins,
+            alpha=0.6,
+            label=f"True Positives (n={len(tp_conf)})",
+            color="#2ecc71",
+            edgecolor="white",
+        )
+    if len(fp_conf) > 0:
+        ax1.hist(
+            fp_conf,
+            bins=bins,
+            alpha=0.6,
+            label=f"False Positives (n={len(fp_conf)})",
+            color="#e74c3c",
+            edgecolor="white",
+        )
+
+    ax1.set_xlabel("Confidence Score", fontsize=11)
+    ax1.set_ylabel("Count", fontsize=11)
+    ax1.set_title("Confidence Distribution: TP vs FP", fontsize=12, fontweight="bold")
+    ax1.legend(loc="upper left")
+    ax1.set_xlim(0, 1)
+    ax1.grid(axis="y", alpha=0.3)
+
+    # Add mean lines
+    if len(tp_conf) > 0:
+        ax1.axvline(tp_conf.mean(), color="#27ae60", linestyle="--", linewidth=2, label=f"TP mean: {tp_conf.mean():.2f}")
+    if len(fp_conf) > 0:
+        ax1.axvline(fp_conf.mean(), color="#c0392b", linestyle="--", linewidth=2, label=f"FP mean: {fp_conf.mean():.2f}")
+
+    # Right: KDE density plot
+    ax2 = axes[1]
+    if len(tp_conf) > 5:
+        sns.kdeplot(tp_conf, ax=ax2, color="#2ecc71", fill=True, alpha=0.4, label="True Positives")
+    if len(fp_conf) > 5:
+        sns.kdeplot(fp_conf, ax=ax2, color="#e74c3c", fill=True, alpha=0.4, label="False Positives")
+
+    ax2.set_xlabel("Confidence Score", fontsize=11)
+    ax2.set_ylabel("Density", fontsize=11)
+    ax2.set_title("Confidence Density: TP vs FP", fontsize=12, fontweight="bold")
+    ax2.legend(loc="upper left")
+    ax2.set_xlim(0, 1)
+    ax2.grid(axis="y", alpha=0.3)
+
+    # Add summary statistics as text box
+    stats_text = []
+    if len(tp_conf) > 0:
+        stats_text.append(f"TP: μ={tp_conf.mean():.2f}, σ={tp_conf.std():.2f}")
+    if len(fp_conf) > 0:
+        stats_text.append(f"FP: μ={fp_conf.mean():.2f}, σ={fp_conf.std():.2f}")
+
+    if stats_text:
+        # Compute separation metric
+        if len(tp_conf) > 0 and len(fp_conf) > 0:
+            mean_diff = tp_conf.mean() - fp_conf.mean()
+            stats_text.append(f"Δμ (TP-FP): {mean_diff:+.2f}")
+
+        textstr = "\n".join(stats_text)
+        props = dict(boxstyle="round", facecolor="wheat", alpha=0.8)
+        ax2.text(
+            0.02,
+            0.98,
+            textstr,
+            transform=ax2.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            bbox=props,
+        )
+
+    plt.suptitle(
+        "Confidence Calibration Analysis: Can We Trust Model Confidence?",
+        fontsize=13,
+        fontweight="bold",
+        y=1.02,
+    )
+    plt.tight_layout()
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close()
+    return path
+
+
+# ---------------------------------------------------------------------------
 # Reporting
 # ---------------------------------------------------------------------------
 def render_metrics_table(
@@ -1294,6 +1565,48 @@ def generate_report(
         ]
     )
 
+    # Topic Recall by Model section
+    report.extend(
+        [
+            "## Topic Recall by Model",
+            "",
+            "Grouped bar chart showing recall per topic, split by model. Reveals model-specific strengths and weaknesses.",
+            "",
+            f"![Topic Recall by Model]({asset_paths.get('topic_recall_by_model', '')})"
+            if asset_paths.get("topic_recall_by_model")
+            else "_No plot generated_",
+            "",
+        ]
+    )
+
+    # Model Agreement Matrix section
+    report.extend(
+        [
+            "## Model Agreement Matrix",
+            "",
+            "Pairwise Cohen's κ between models. Higher values indicate correlated predictions; lower values suggest complementary errors (good for ensembles).",
+            "",
+            f"![Model Agreement Matrix]({asset_paths.get('model_agreement_matrix', '')})"
+            if asset_paths.get("model_agreement_matrix")
+            else "_No plot generated_",
+            "",
+        ]
+    )
+
+    # Confidence Calibration Analysis section
+    report.extend(
+        [
+            "## Confidence Calibration Analysis",
+            "",
+            "Distribution of model confidence scores for True Positives vs False Positives. A well-calibrated model should show higher confidence for TPs than FPs.",
+            "",
+            f"![Confidence Calibration]({asset_paths.get('confidence_calibration', '')})"
+            if asset_paths.get("confidence_calibration")
+            else "_No plot generated_",
+            "",
+        ]
+    )
+
     # Per-misconception analysis section
     if misconception_stats is not None and not misconception_stats.empty:
         report.extend(
@@ -1668,6 +1981,10 @@ def main(
         "topic_bars": ASSET_DIR / "topic_recall_bars.png",
         "model_comparison": ASSET_DIR / "model_comparison.png",
         "misconception_recall": ASSET_DIR / "misconception_recall.png",
+        # New visualizations
+        "topic_recall_by_model": ASSET_DIR / "topic_recall_by_model.png",
+        "model_agreement_matrix": ASSET_DIR / "model_agreement_matrix.png",
+        "confidence_calibration": ASSET_DIR / "confidence_calibration.png",
     }
 
     # For ablation mode, use hybrid data for topic plots; add ablation-specific plots
@@ -1700,6 +2017,11 @@ def main(
             plot_strategy_f1_comparison(hybrid_metrics, asset_paths["strategy_f1"])
             plot_precision_recall_scatter(hybrid_metrics, asset_paths["pr_scatter"])
             plot_model_comparison(hybrid_metrics, asset_paths["model_comparison"])
+
+        # New visualizations (use hybrid data)
+        plot_topic_recall_by_model(hybrid_opps, asset_paths["topic_recall_by_model"])
+        plot_model_agreement_matrix(hybrid_opps, asset_paths["model_agreement_matrix"])
+        plot_confidence_calibration_distribution(hybrid_dets, asset_paths["confidence_calibration"])
     else:
         plot_topic_heatmap(opportunities_df, asset_paths["heatmap"])
         plot_hallucinations(detections_df, asset_paths["hallucinations"])
@@ -1712,6 +2034,11 @@ def main(
         misconception_stats = compute_misconception_recall(opportunities_df, groundtruth)
         if not misconception_stats.empty:
             plot_misconception_recall_bars(misconception_stats, asset_paths["misconception_recall"])
+
+        # New visualizations
+        plot_topic_recall_by_model(opportunities_df, asset_paths["topic_recall_by_model"])
+        plot_model_agreement_matrix(opportunities_df, asset_paths["model_agreement_matrix"])
+        plot_confidence_calibration_distribution(detections_df, asset_paths["confidence_calibration"])
 
     # Build asset paths for run-local report (relative to run directory)
     run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
