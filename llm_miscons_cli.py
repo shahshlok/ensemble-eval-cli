@@ -35,12 +35,12 @@ console = Console()
 MODELS = [
     "openai/gpt-5.1",
     "google/gemini-2.5-flash-preview-09-2025",
-    "deepseek/deepseek-v3.2-speciale",
+    "anthropic/claude-haiku-4.5",
 ]
 MODEL_SHORT_NAMES = {
     "openai/gpt-5.1": "GPT-5.1",
     "google/gemini-2.5-flash-preview-09-2025": "Gemini-2.5-Flash-Preview",
-    "deepseek/deepseek-v3.2-speciale": "Deepseek-v3.2-Speciale",
+    "anthropic/claude-haiku-4.5": "Haiku-4.5",
 }
 STRATEGIES = ["minimal", "baseline", "socratic", "rubric_only"]
 MAX_CONCURRENCY = 30
