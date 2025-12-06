@@ -421,8 +421,13 @@ async def generate_file(
     output_path: Path,
     semaphore: asyncio.Semaphore | None = None,
     max_retries: int = 3,
+    harness: Any | None = None,
 ) -> None:
-    """Generate a single Java file."""
+    """Generate a single Java file.
+    
+    For SEEDED files with a harness, verifies that the output differs from
+    the clean reference. Regenerates up to max_retries times if outputs match.
+    """
 
     async def _call_api() -> str:
         messages = build_messages(persona, question, question_text, brief, file_entry)
@@ -444,6 +449,16 @@ async def generate_file(
             else:
                 text = await _call_api()
             cleaned = strip_code_fences(text)
+            
+            # Differential execution check for SEEDED files
+            if harness is not None and file_entry.get("type") == "SEEDED":
+                is_diff, reason = await harness.verify_difference(cleaned, persona, question)
+                if not is_diff and reason == "MATCH":
+                    # Bug is silent, regenerate
+                    attempt += 1
+                    console.print(f"[yellow]Silent bug detected for {output_path.name}, regenerating ({attempt}/{max_retries})...[/yellow]")
+                    continue
+            
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(cleaned + "\n", encoding="utf-8")
             return
@@ -468,14 +483,33 @@ async def run_generation(
     model: str,
     concurrency: int,
     dry_run: bool = False,
+    verify: bool = True,
 ) -> None:
-    """Generate Java files from an existing manifest."""
+    """Generate Java files from an existing manifest.
+    
+    Args:
+        verify: If True, run differential execution to verify seeded files.
+    """
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    question_texts = manifest.get("question_texts") or load_question_texts()
+    assignment = manifest.get("assignment", "a2")
+    question_texts = manifest.get("question_texts") or load_question_texts(assignment)
+    question_briefs = ASSIGNMENTS[assignment]["question_briefs"]
     students = manifest.get("students", [])
     semaphore = asyncio.Semaphore(concurrency) if concurrency and concurrency > 0 else None
 
     client = AsyncOpenAI()
+    
+    # Initialize verification harness if verify is enabled
+    harness = None
+    if verify:
+        from utils.verification.harness import VerificationHarness
+        harness = VerificationHarness(
+            client=client,
+            model=model,
+            assignment=assignment,
+            question_texts=question_texts,
+            question_briefs=question_briefs,
+        )
 
     tasks = []
     for student in students:
@@ -494,10 +528,11 @@ async def run_generation(
                     persona=persona,
                     question=question,
                     question_text=question_texts[question],
-                    brief=QUESTION_BRIEFS[question],
+                    brief=question_briefs[question],
                     file_entry=file_entry,
                     output_path=target_path,
                     semaphore=semaphore,
+                    harness=harness,
                 )
             )
 
