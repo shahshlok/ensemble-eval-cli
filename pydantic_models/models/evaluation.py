@@ -1,239 +1,149 @@
-"""Models for individual model evaluation results.
+"""Models for notional machine misconception detection.
 
-Top‑down structure of the final model:
+Simplified schema for thesis research on LLM-based misconception discovery.
+Focuses on blind discovery - LLMs infer category names rather than matching to a predefined taxonomy.
 
-    ModelEvaluation
-    ├─ model_name: str
-    ├─ provider: str
-    ├─ run_id: str
-    ├─ config: Config
-    │   ├─ system_prompt_id: str
-    │   └─ rubric_prompt_id: str
---- Everything from here is from the LLMEvaluationResponse model ---
-    ├─ scores: Scores
-    │   ├─ total_points_awarded: float
-    │   ├─ max_points: float
-    │   └─ percentage: float
-    ├─ category_scores: list[CategoryScore]
-    │   └─ CategoryScore
-    │       ├─ task: str
-    │       ├─ points_awarded: float
-    │       ├─ max_points: float
-    │       ├─ reasoning: str
-    │       ├─ confidence: float
-    │       └─ reasoning_tokens: int
-    ├─ feedback: Feedback
-    │   ├─ overall_comment: str
-    │   ├─ strengths: list[str]
-    │   └─ areas_for_improvement: list[str]
-    └─ misconceptions: list[Misconception]
-        └─ Misconception
-            ├─ topic: str
-            ├─ task: str
-            ├─ name: str
-            ├─ description: str
+Top-down structure:
+
+    LLMDetectionResponse
+    └─ misconceptions: list[NotionalMisconception]
+        └─ NotionalMisconception
+            ├─ inferred_category_name: str  (open-ended, LLM names it)
+            ├─ student_thought_process: str
+            ├─ conceptual_gap: str
+            ├─ error_manifestation: str
             ├─ confidence: float
-            ├─ evidence: list[Evidence]
-            │   └─ Evidence
-            │       ├─ source: str
-            │       ├─ file_path: str
-            │       ├─ language: str
-            │       ├─ snippet: str
-            │       ├─ line_start: int
-            │       ├─ line_end: int
-            │       └─ note: str
-            └─ validated_by: str | None
+            └─ evidence: list[Evidence]
+                └─ Evidence
+                    ├─ line_number: int
+                    └─ code_snippet: str
+
+    ModelDetection
+    └─ (extends LLMDetectionResponse with metadata)
+        ├─ model_name: str
+        ├─ provider: str
+        ├─ run_id: str
+        ├─ strategy: str
+        └─ misconceptions: list[NotionalMisconception]
 """
 
-from enum import Enum
+from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Canonical topics for misconception classification (from Assignment 2 rubric)
-# These are the actual learning objectives the assignment tests
-CANONICAL_TOPICS = [
-    "Variables",  # Declaring, assigning, using in expressions
-    "Data Types",  # int vs double, type conversions
-    "Constants",  # Math library (Math.pow, Math.sqrt)
-    "Reading input from the keyboard",  # Scanner usage, prompts
-    "Other",  # Catch-all for things that don't fit above
-]
-
-
-class Config(BaseModel):
-    """Configuration settings for model evaluation."""
-
-    # extra="forbid" means that bad keys trigger validation errors instead of being dropped silently
-    model_config = ConfigDict(extra="forbid")
-
-    system_prompt_id: str = Field(..., description="ID of system prompt template used")
-    rubric_prompt_id: str = Field(
-        ..., description="ID of grading prompt template specific to this rubric/question"
-    )
-
 
 class Evidence(BaseModel):
-    """Evidence supporting a misconception finding."""
+    """A specific code snippet that demonstrates a misconception."""
 
     model_config = ConfigDict(extra="forbid")
 
-    source: str = Field(
-        ..., description="Where the snippet comes from (e.g., student_code, tests, text_answer)"
+    line_number: int = Field(
+        ..., description="Line number where the evidence appears (1-indexed)"
     )
-    file_path: str = Field(..., description="Which file the snippet lives in")
-    language: str = Field(
-        ...,
-        description="Language of the snippet (could also be 'text' if it's a written explanation)",
-    )
-    snippet: str = Field(..., description="Concrete code/text that demonstrates the issue")
-    line_start: int = Field(
-        ..., description="Approximate starting line number in that file (for UI highlighting)"
-    )
-    line_end: int = Field(
-        ..., description="Approximate ending line number in that file (for UI highlighting)"
-    )
-    note: str = Field(
-        ..., description="Concise explanation of why this snippet is considered evidence"
+    code_snippet: str = Field(
+        ..., description="The actual code that demonstrates the misconception"
     )
 
 
-class MisconceptionSeverity(str, Enum):
-    """Severity level of a misconception."""
+class NotionalMisconception(BaseModel):
+    """
+    A misconception rooted in a flawed mental model of the computer.
 
-    CRITICAL = "critical"  # Fundamentally breaks the solution
-    MAJOR = "major"  # Significant impact on correctness
-    MINOR = "minor"  # Small issue, partial understanding
-    SURFACE = "surface"  # Superficial, may self-correct
-
-
-class MisconceptionCategory(str, Enum):
-    """Category of misconception by nature."""
-
-    CONCEPTUAL = "conceptual"  # Flawed mental model of how something works
-    PROCEDURAL = "procedural"  # Wrong steps/algorithm, right concept
-    SYNTACTIC = "syntactic"  # Language-specific syntax confusion (not typos)
-    SEMANTIC = "semantic"  # Misunderstanding what code does vs intended
-
-
-class Misconception(BaseModel):
-    """Identified misconception in student's work."""
+    Designed for blind discovery: the LLM names the category rather than
+    choosing from a predefined taxonomy. This allows measuring how well
+    LLMs can independently discover notional machine categories.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    # === Core identification ===
-    topic: str = Field(
+    # 1. The Label (Open-ended for Blind Discovery)
+    inferred_category_name: str = Field(
         ...,
-        description="The topic or concept associated with this misconception. Should be one of: Variables, Data Types, Constants, Reading input from the keyboard, or Other (if doesn't fit). Do NOT report syntax errors (missing semicolons, typos) as misconceptions.",
+        description=(
+            "A short, descriptive name for the type of mental model failure "
+            "(e.g., 'Automatic Variable Updates', 'Input Order Confusion', "
+            "'Integer Division Truncation'). Be specific and descriptive."
+        ),
     )
-    task: str = Field(
-        ..., description="The task name from the rubric category where this misconception appears"
-    )
-    name: str = Field(
+
+    # 2. Mental Model Analysis
+    student_thought_process: str = Field(
         ...,
-        description="Human-readable label for this misconception (e.g., 'Integer division truncation')",
+        description=(
+            "Reconstruct the student's flawed belief. "
+            "Start with 'The student believes...'"
+        ),
     )
-    description: str = Field(
-        ..., description="Description of what behavior/understanding this misconception reflects"
-    )
-
-    # === Classification ===
-    severity: MisconceptionSeverity = Field(
-        default=MisconceptionSeverity.MAJOR,
-        description="How severe is this misconception? critical=breaks solution, major=significant impact, minor=partial understanding, surface=likely self-correcting",
-    )
-    category: MisconceptionCategory = Field(
-        default=MisconceptionCategory.CONCEPTUAL,
-        description="Type of misconception: conceptual=flawed mental model, procedural=wrong algorithm, syntactic=language confusion, semantic=misunderstanding code behavior",
+    conceptual_gap: str = Field(
+        ...,
+        description=(
+            "Explain the gap between the student's mental model "
+            "and the actual Java execution model."
+        ),
     )
 
-    # === Student's mental model ===
-    student_belief: str = Field(
+    # 3. Error Manifestation
+    error_manifestation: str = Field(
         default="",
-        description="What does the student appear to believe? State it from their perspective. E.g., 'The student believes that ^ is the exponentiation operator in Java'",
-    )
-    correct_understanding: str = Field(
-        default="",
-        description="What is the correct understanding? E.g., 'In Java, ^ is the XOR operator. Use Math.pow(base, exponent) for exponentiation.'",
-    )
-
-    # === Impact analysis ===
-    symptoms: list[str] = Field(
-        default_factory=list,
-        description="Observable symptoms in the code/output. E.g., ['Result is always 0 or 1', 'Output doesn't match expected values']",
-    )
-    root_cause: str = Field(
-        default="",
-        description="The underlying reason for this misconception. E.g., 'Confusion from mathematical notation where ^ means power'",
+        description=(
+            "How does this misconception manifest? "
+            "(e.g., 'wrong output', 'runtime exception', 'compile error', 'no visible error')"
+        ),
     )
 
-    # === Remediation ===
-    remediation_hint: str = Field(
-        default="",
-        description="A hint for how the student could fix this. E.g., 'Replace x^2 with Math.pow(x, 2) or x*x'",
-    )
-    related_concepts: list[str] = Field(
-        default_factory=list,
-        description="Related concepts the student should review. E.g., ['Java Math library', 'Operator precedence', 'Type casting']",
-    )
-
-    # === Confidence & evidence ===
+    # 4. Confidence & Evidence
     confidence: float = Field(
         ...,
         ge=0.0,
         le=1.0,
-        description="Model's confidence (0-1) that this misconception truly applies",
+        description="Model's confidence (0-1) that this misconception is present",
     )
-    confidence_rationale: str = Field(
-        default="",
-        description="Why this confidence level? E.g., 'High confidence because the pattern x^2 appears multiple times consistently'",
-    )
-
-    # Check the Evidence Pydantic Model
     evidence: list[Evidence] = Field(
-        ...,
-        description="Evidence showing exactly where this misconception appears in the submission",
-    )
-
-    # === Validation ===
-    is_recurring: bool = Field(
-        default=False,
-        description="Does this misconception appear multiple times in the submission?",
-    )
-    affects_output: bool = Field(
-        default=True, description="Does this misconception affect the program output/correctness?"
-    )
-    validated_by: str | None = Field(
-        None, description="Optional human rater ID when a TA confirms this annotation"
+        ..., description="Code snippets demonstrating this belief"
     )
 
 
-class LLMEvaluationResponse(BaseModel):
+class LLMDetectionResponse(BaseModel):
     """
-    Response from LLM containing only the evaluation content (no metadata).
+    Response from LLM containing detected misconceptions.
 
-    This is what the LLM fills out. Metadata (model_name, provider, run_id, config)
-    is added by the developer to create the full ModelEvaluation.
+    This is what the LLM fills out. Metadata (model_name, strategy, etc.)
+    is added programmatically to create the full ModelDetection.
     """
 
-    # Misconceptions has the Evidence model nested in it
-    misconceptions: list[Misconception] = Field(
-        ..., description="Misconceptions for this submission according to this model"
+    model_config = ConfigDict(extra="forbid")
+
+    misconceptions: list[NotionalMisconception] = Field(
+        default_factory=list,
+        description="List of detected notional machine misconceptions",
     )
 
 
-class ModelEvaluation(LLMEvaluationResponse):
+class ModelDetection(LLMDetectionResponse):
     """
-    Complete evaluation result from a single grading model.
+    Complete detection result from a single LLM.
 
-    See the module docstring at the top of this file for
-    a full ASCII diagram of the JSON structure.
+    Extends LLMDetectionResponse with execution metadata.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     model_name: str = Field(
-        ..., description="Human-readable model name with version (e.g., gpt-5-nano-2025-08-07)"
+        ...,
+        description="Model name with version (e.g., gpt-4o-2024-08-06, gemini-2.0-flash)",
     )
-    provider: str = Field(..., description="Who provides this model (for analysis across vendors)")
-    run_id: str = Field(..., description="ID of this model invocation for traceability in logs")
-    config: Config = Field(..., description="Configuration settings for this model run")
+    provider: str = Field(
+        ..., description="Provider name (openai, google, anthropic, openrouter)"
+    )
+    run_id: str = Field(
+        ..., description="Unique ID for this detection run"
+    )
+    strategy: str = Field(
+        ..., description="Prompt strategy used (baseline, taxonomy, cot, socratic)"
+    )
+
+
+# Legacy aliases for backwards compatibility (deprecated)
+# These will be removed in a future version
+Config = None  # No longer used
+Misconception = NotionalMisconception  # Alias for migration

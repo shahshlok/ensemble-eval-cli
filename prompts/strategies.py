@@ -1,336 +1,249 @@
 """
-Prompt strategies for grading and misconception detection research.
+Prompt strategies for notional machine misconception detection.
 
-This module contains multiple prompt architectures for A/B testing.
-The key research question: Can LLMs discover misconceptions WITHOUT being given examples?
+This module contains 4 prompt architectures for thesis experiments:
+1. BASELINE - Simple error classification (control condition)
+2. TAXONOMY - Explicit notional machine categories
+3. COT - Chain of thought line-by-line tracing
+4. SOCRATIC - Mental model probing
+
+The key research question: Can LLMs discover notional machine misconceptions
+using different prompting strategies?
 """
 
 from __future__ import annotations
 
-import json
 from enum import Enum
-from typing import Any
 
 
 class PromptStrategy(str, Enum):
-    """Available prompt strategies for testing."""
+    """Available prompt strategies for misconception detection."""
 
-    BASELINE = "baseline"  # Current approach with examples (control)
-    MINIMAL = "minimal"  # No examples, minimal guidance
-    SOCRATIC = "socratic"  # Chain-of-thought reasoning
-    CONTRASTIVE = "contrastive"  # Compare against reference solution
-    RUBRIC_ONLY = "rubric_only"  # Grade only, no misconception hunting
+    BASELINE = "baseline"    # Simple error classification
+    TAXONOMY = "taxonomy"    # Taxonomy-guided detection
+    COT = "cot"              # Chain of thought tracing
+    SOCRATIC = "socratic"    # Mental model probing
 
 
-def build_baseline_prompt(question: str, rubric: dict[str, Any], student_code: str) -> str:
+# JSON output schema for all strategies
+OUTPUT_SCHEMA = '''
+Return your analysis as JSON matching this exact schema:
+
+{
+  "misconceptions": [
+    {
+      "inferred_category_name": "Short descriptive name for the mental model failure",
+      "student_thought_process": "The student believes...",
+      "conceptual_gap": "Explanation of the gap between student's model and actual Java semantics",
+      "error_manifestation": "How this manifests (wrong output, compile error, etc.)",
+      "confidence": 0.0 to 1.0,
+      "evidence": [
+        {"line_number": 5, "code_snippet": "double a = (v1-v0)/t;"}
+      ]
+    }
+  ]
+}
+
+If no misconceptions are found, return: {"misconceptions": []}
+'''
+
+
+def build_baseline_prompt(problem_description: str, student_code: str) -> str:
     """
-    BASELINE (Control): Current approach that lists example misconceptions.
+    BASELINE (Control): Simple error classification without notional machine guidance.
 
-    This is what we're testing AGAINST - it biases the LLM by showing examples.
+    Tests whether LLMs can detect misconceptions without explicit framework.
     """
-    rubric_str = json.dumps(rubric, indent=2)
+    return f'''You are a CS1 code reviewer.
 
-    return f"""
-You are an expert grader for a Computer Science assignment.
+PROBLEM:
+{problem_description}
 
-**Question:**
-{question}
-
-**Rubric:**
-{rubric_str}
-
-**Student Submission:**
+STUDENT CODE:
 ```java
 {student_code}
 ```
 
-Evaluate the student's submission based on the provided rubric.
-Provide a structured output containing:
-1. Scores for each category in the rubric.
-2. Specific feedback for each category.
-3. Identification of any **misconceptions** (IMPORTANT - read carefully):
+TASK:
+1. Determine if the code produces correct output for the given problem.
+2. If there is a bug, identify the root cause.
+3. Classify any conceptual errors you find.
 
-   A **misconception** is a fundamental misunderstanding of a concept, NOT a simple typo or syntax error.
-   
-   **REPORT these as misconceptions:**
-   - Using `int` instead of `double` for decimal calculations
-   - Using `^` instead of `Math.pow()` for exponentiation  
-   - Wrong formula (e.g., `(v1 + v0) / t` instead of `(v1 - v0) / t`)
-   - Not understanding integer division (`5/2` gives `2`, not `2.5`)
-   - Incorrect operator precedence
-   - Misinterpreting the problem requirements
-   
-   **DO NOT report these as misconceptions:**
-   - Missing semicolons, brackets, or braces (syntax typo)
-   - Misspelled variable names (typo)
-   - Missing import statements (mechanical)
-   - Formatting or whitespace issues
-   
-   For each misconception, specify:
-   - **Topic**: One of: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
-   - The task name from the rubric where it appears
+Do NOT report:
+- Syntax typos (missing semicolons, misspelled variables)
+- Style issues (formatting, naming conventions)
 
-4. Overall feedback.
-""".strip()
+DO report:
+- Fundamental misunderstandings about how Java works
+- Logic errors that suggest flawed mental models
+- Incorrect assumptions about program execution
+
+{OUTPUT_SCHEMA}
+'''.strip()
 
 
-def build_minimal_prompt(question: str, rubric: dict[str, Any], student_code: str) -> str:
+def build_taxonomy_prompt(problem_description: str, student_code: str) -> str:
     """
-    MINIMAL: No example misconceptions. Let the LLM discover them naturally.
+    TAXONOMY: Explicit notional machine categories guide detection.
 
-    This tests whether LLMs can identify misconceptions without being primed.
+    Provides the 5 notional machine categories to help classify misconceptions.
     """
-    rubric_str = json.dumps(rubric, indent=2)
+    return f'''You are a CS1 Teaching Assistant analyzing student code for notional machine misconceptions.
 
-    return f"""
-You are evaluating a CS1 student's Java submission.
+A "Notional Machine" is the mental model a student has of how the computer executes their code.
+Misconceptions occur when this mental model diverges from actual Java execution.
 
-## Problem
-{question}
+NOTIONAL MACHINES TAXONOMY:
 
-## Student Code
+1. THE REACTIVE STATE MACHINE
+   - Belief: Variables update automatically like Excel cells
+   - Example: Computing a formula BEFORE reading input, expecting the result to update later
+
+2. THE ANTHROPOMORPHIC I/O MACHINE
+   - Belief: The computer "reads" the prompt text to know which variable to fill
+   - Example: Prompt says "Enter x1, y1:" but code reads into y1 first
+
+3. THE FLUID TYPE MACHINE
+   - Belief: Type conversions happen automatically; division always gives decimals
+   - Example: int/int gives truncated result, but student expects decimal
+
+4. THE ALGEBRAIC SYNTAX MACHINE
+   - Belief: Mathematical notation works directly in code
+   - Example: Using ^ for power instead of Math.pow, or ignoring operator precedence
+
+5. THE VOID MACHINE
+   - Belief: Methods modify arguments in place without needing assignment
+   - Example: Calling Math.sqrt(x) without assigning the result
+
+PROBLEM:
+{problem_description}
+
+STUDENT CODE:
 ```java
 {student_code}
 ```
 
-## Rubric
-{rubric_str}
+TASK:
+Analyze the code for notional machine misconceptions. For each misconception:
+- Name the category (use your own words, don't just copy the taxonomy names)
+- Explain what the student believes vs. reality
+- Point to specific evidence
 
-## Instructions
-
-1. **Score each rubric criterion** (points awarded, brief justification)
-
-2. **Identify conceptual misunderstandings**
-   
-   A conceptual misunderstanding is when the student demonstrates a flawed mental model 
-   about how programming or the problem domain works. This is different from:
-   - Typos or syntax errors
-   - Forgetting something mechanical (like closing a resource)
-   - Style preferences
-   
-   For each misunderstanding you find, provide:
-   
-   **Required:**
-   - `name`: Short label (e.g., "Integer division truncation")
-   - `description`: What behavior this misconception reflects
-   - `topic`: One of "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
-   - `student_belief`: What does the student appear to believe? State from their perspective.
-   - `correct_understanding`: What is the correct understanding?
-   - `confidence`: How confident are you this is a real misconception? (0.0-1.0)
-   - `evidence`: Quote the specific code that demonstrates this
-   
-   **Classification:**
-   - `severity`: How bad is this? (critical/major/minor/surface)
-   - `category`: What type? (conceptual/procedural/syntactic/semantic)
-   
-   **Analysis:**
-   - `symptoms`: Observable problems in the code/output (list)
-   - `root_cause`: Why might the student have this misconception?
-   - `affects_output`: Does this change the program's output? (true/false)
-   - `is_recurring`: Does this pattern appear multiple times? (true/false)
-   
-   **Remediation:**
-   - `remediation_hint`: How could the student fix this?
-   - `related_concepts`: What should they review? (list)
-
-3. **Provide overall feedback** (strengths and areas for improvement)
-""".strip()
+{OUTPUT_SCHEMA}
+'''.strip()
 
 
-def build_socratic_prompt(question: str, rubric: dict[str, Any], student_code: str) -> str:
+def build_cot_prompt(problem_description: str, student_code: str) -> str:
     """
-    SOCRATIC: Chain-of-thought reasoning through the code.
+    COT (Chain of Thought): Line-by-line execution tracing.
 
-    Forces the LLM to reason step-by-step, which may surface misconceptions
-    that direct prompting misses.
+    Forces the LLM to trace execution step-by-step to find where
+    student mental model diverges from actual execution.
     """
-    rubric_str = json.dumps(rubric, indent=2)
+    return f'''You are a runtime environment simulator.
 
-    return f"""
-You are a teaching assistant analyzing a CS1 student's code submission.
+PROBLEM:
+{problem_description}
 
-## Problem Statement
-{question}
-
-## Student's Code
+STUDENT CODE:
 ```java
 {student_code}
 ```
 
-## Rubric
-{rubric_str}
+INSTRUCTIONS:
+Step through this code systematically:
 
----
+1. TRACE EXECUTION
+   - Go line by line
+   - Track the state of ALL variables after each line
+   - Note the order of input/output operations
 
-Analyze this submission step by step:
+2. IDENTIFY DIVERGENCE
+   - Compare actual computed values to mathematically expected values
+   - Find where the student's intended behavior differs from actual behavior
 
-### STEP 1: What should correct code do?
-Describe the expected algorithm and key implementation details.
+3. DIAGNOSE THE MENTAL MODEL
+   - For each divergence, ask: "What would the student have to believe for this to make sense?"
+   - Identify the flawed assumption about how Java works
 
-### STEP 2: Trace the student's code
-Walk through their code line by line. What does each part actually do?
+4. SUMMARIZE MISCONCEPTIONS
+   - Name each conceptual error found
+   - Explain the gap between belief and reality
 
-### STEP 3: Identify divergences
-Where does the student's approach differ from correct implementation?
-For each divergence, note:
-- The specific code
-- What it does vs. what it should do
+Show your work, then output the final JSON.
 
-### STEP 4: Diagnose the WHY
-For each divergence from Step 3, determine:
-- Is this a **careless mistake** (typo, forgot something, would know better)?
-- Is this a **conceptual error** (student misunderstands how something works)?
-
-For conceptual errors, explain:
-- What does the student seem to believe?
-- What is the correct understanding?
-- Topic category: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
-
-### STEP 5: Score against rubric
-Assign points for each criterion with justification.
-
-### STEP 6: Summary
-- Total score
-- Key misconceptions found (if any)
-- Overall feedback
-""".strip()
+{OUTPUT_SCHEMA}
+'''.strip()
 
 
-def build_contrastive_prompt(
-    question: str,
-    rubric: dict[str, Any],
-    student_code: str,
-    reference_solution: str,
-) -> str:
+def build_socratic_prompt(problem_description: str, student_code: str) -> str:
     """
-    CONTRASTIVE: Compare student code against a reference solution.
+    SOCRATIC: Mental model probing through questioning.
 
-    Explicit comparison may help the LLM identify deviations more accurately.
-    Requires a reference solution to be provided.
+    Approaches the code as a tutor trying to understand student thinking.
     """
-    rubric_str = json.dumps(rubric, indent=2)
+    return f'''You are an expert Computer Science tutor using the Socratic Method.
 
-    return f"""
-You are comparing a student's code submission against a reference solution.
+Your goal is NOT to fix the code, but to understand the student's MENTAL MODEL.
 
-## Problem
-{question}
+PROBLEM:
+{problem_description}
 
-## Reference Solution (Correct)
-```java
-{reference_solution}
-```
-
-## Student Submission
+STUDENT CODE:
 ```java
 {student_code}
 ```
 
-## Rubric
-{rubric_str}
+PROBE THE STUDENT'S BELIEFS:
 
----
+Look at the code and ask yourself:
+- Does the student think the computer understands English prompts?
+- Does the student think variables update automatically when their dependencies change?
+- Does the student think math notation (like ^) works the same as on paper?
+- Does the student think methods modify their arguments in place?
+- Does the student understand when type conversion happens?
 
-## Instructions
+For each flawed belief you identify:
+1. State what the student appears to believe
+2. Explain why this belief is incorrect in Java
+3. Point to the specific code that reveals this belief
 
-1. **Identify differences** between the student's code and the reference.
-   For each difference:
-   - Quote both versions
-   - Classify as:
-     - **STYLE**: Different but equally valid approach
-     - **TYPO**: Obvious mistake, student likely knows the correct way
-     - **MISCONCEPTION**: Student appears to misunderstand a concept
-   
-2. **For each MISCONCEPTION**, explain:
-   - What the student seems to believe
-   - Why this belief is incorrect
-   - Topic: "Variables", "Data Types", "Constants", "Reading input from the keyboard", or "Other"
+Be empathetic - these are common, reasonable mistakes for beginners.
 
-3. **Score against rubric** with justifications
-
-4. **Overall feedback** for the student
-""".strip()
-
-
-def build_rubric_only_prompt(question: str, rubric: dict[str, Any], student_code: str) -> str:
-    """
-    RUBRIC_ONLY: Grade only, no misconception detection.
-
-    Control condition to measure if misconception hunting affects grading accuracy.
-    """
-    rubric_str = json.dumps(rubric, indent=2)
-
-    return f"""
-You are grading a CS1 student's Java submission.
-
-## Problem
-{question}
-
-## Student Code
-```java
-{student_code}
-```
-
-## Rubric
-{rubric_str}
-
-## Instructions
-
-Grade this submission strictly according to the rubric.
-
-For each rubric criterion:
-- Award points (0 to max)
-- Provide brief justification
-
-Then provide:
-- Total score
-- Overall feedback (1-2 sentences)
-
-Focus only on whether the code meets the rubric requirements.
-""".strip()
+{OUTPUT_SCHEMA}
+'''.strip()
 
 
 # Strategy registry
 STRATEGIES = {
     PromptStrategy.BASELINE: build_baseline_prompt,
-    PromptStrategy.MINIMAL: build_minimal_prompt,
+    PromptStrategy.TAXONOMY: build_taxonomy_prompt,
+    PromptStrategy.COT: build_cot_prompt,
     PromptStrategy.SOCRATIC: build_socratic_prompt,
-    PromptStrategy.RUBRIC_ONLY: build_rubric_only_prompt,
-}
-
-# Contrastive requires reference solution, handled separately
-STRATEGIES_WITH_REFERENCE = {
-    PromptStrategy.CONTRASTIVE: build_contrastive_prompt,
 }
 
 
 def build_prompt(
     strategy: PromptStrategy,
-    question: str,
-    rubric: dict[str, Any],
+    problem_description: str,
     student_code: str,
-    reference_solution: str | None = None,
 ) -> str:
     """
     Build a prompt using the specified strategy.
 
     Args:
         strategy: Which prompt architecture to use
-        question: The assignment question text
-        rubric: The grading rubric as a dict
-        student_code: The student's submission
-        reference_solution: Required for CONTRASTIVE strategy
+        problem_description: The assignment problem text
+        student_code: The student's Java submission
 
     Returns:
         The constructed prompt string
     """
-    if strategy == PromptStrategy.CONTRASTIVE:
-        if reference_solution is None:
-            raise ValueError("CONTRASTIVE strategy requires a reference_solution")
-        return build_contrastive_prompt(question, rubric, student_code, reference_solution)
+    if isinstance(strategy, str):
+        strategy = PromptStrategy(strategy)
 
     builder = STRATEGIES.get(strategy)
     if builder is None:
-        raise ValueError(f"Unknown strategy: {strategy}")
+        raise ValueError(f"Unknown strategy: {strategy}. Valid: {list(PromptStrategy)}")
 
-    return builder(question, rubric, student_code)
+    return builder(problem_description, student_code)

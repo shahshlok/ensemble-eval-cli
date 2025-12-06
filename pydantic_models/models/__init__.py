@@ -1,17 +1,27 @@
-"""Models for individual model evaluation results."""
+"""Models for notional machine misconception detection."""
 
 from .evaluation import (
-    Config,
     Evidence,
-    LLMEvaluationResponse,
-    Misconception,
-    ModelEvaluation,
+    LLMDetectionResponse,
+    ModelDetection,
+    NotionalMisconception,
 )
 
+# Legacy aliases for backwards compatibility
+Misconception = NotionalMisconception
+LLMEvaluationResponse = LLMDetectionResponse
+ModelEvaluation = ModelDetection
+Config = None  # Deprecated, no longer used
+
 __all__ = [
-    "Config",
+    # New models
     "Evidence",
-    "LLMEvaluationResponse",
+    "NotionalMisconception",
+    "LLMDetectionResponse",
+    "ModelDetection",
+    # Legacy aliases (deprecated)
     "Misconception",
+    "LLMEvaluationResponse",
     "ModelEvaluation",
+    "Config",
 ]
