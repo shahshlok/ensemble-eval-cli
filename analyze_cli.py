@@ -724,6 +724,57 @@ def plot_topic_recall_bars(opportunities: pd.DataFrame, path: Path) -> Path:
     return path
 
 
+def plot_per_misconception_recall(
+    opportunities: pd.DataFrame, 
+    groundtruth: list[dict[str, Any]],
+    path: Path
+) -> Path:
+    """Horizontal bar chart showing recall by individual misconception ID."""
+    if opportunities.empty:
+        return path
+    
+    gt_map = {m["id"]: m for m in groundtruth}
+    
+    # Group by expected_id and calculate recall
+    mis_stats = (
+        opportunities.groupby("expected_id")
+        .agg(recall=("success", "mean"), n=("success", "count"))
+        .reset_index()
+        .sort_values("recall")
+    )
+    
+    # Add misconception names
+    mis_stats["name"] = mis_stats["expected_id"].apply(
+        lambda x: gt_map.get(x, {}).get("name", x)[:25] if x else "Unknown"
+    )
+    mis_stats["label"] = mis_stats["expected_id"] + "\n" + mis_stats["name"]
+    
+    plt.figure(figsize=(12, max(6, 0.5 * len(mis_stats))))
+    colors = plt.cm.RdYlGn(mis_stats["recall"])  # Red=low, Green=high
+    bars = plt.barh(mis_stats["label"], mis_stats["recall"], color=colors)
+    
+    # Add count and recall labels
+    for bar, (_, row) in zip(bars, mis_stats.iterrows()):
+        plt.text(
+            bar.get_width() + 0.02,
+            bar.get_y() + bar.get_height() / 2,
+            f"n={int(row['n'])} ({row['recall']:.0%})",
+            va="center",
+            fontsize=9,
+            color="gray",
+        )
+    
+    plt.xlabel("Recall")
+    plt.ylabel("Misconception")
+    plt.title("Detection Recall by Misconception ID (sorted by difficulty)")
+    plt.xlim(0, 1.25)
+    plt.axvline(x=0.5, color="gray", linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(path, dpi=200)
+    plt.close()
+    return path
+
+
 def plot_model_comparison(metrics: pd.DataFrame, path: Path) -> Path:
     """Side-by-side comparison of all models on P/R/F1 (averaged across strategies)."""
     if metrics.empty:
@@ -2417,5 +2468,97 @@ def list_runs():
     console.print(table)
 
 
+@app.command("validate-dataset")
+def validate_dataset(
+    manifest: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Path to manifest.json"),
+    groundtruth: Path = typer.Option(DEFAULT_GROUNDTRUTH_PATH, help="Path to groundtruth.json"),
+):
+    """Validate and summarize the synthetic dataset before analysis."""
+    if not manifest.exists():
+        console.print(f"[red]Manifest not found: {manifest}[/red]")
+        raise typer.Exit(1)
+    
+    manifest_data = load_manifest(manifest)
+    gt_data = load_groundtruth(groundtruth) if groundtruth.exists() else []
+    gt_map = {m["id"]: m for m in gt_data}
+    
+    # Basic counts
+    students = manifest_data.get("students", [])
+    total_students = len(students)
+    manifest_version = manifest_data.get("manifest_version", "1.0")
+    
+    console.print(f"\n[bold cyan]Dataset Summary[/bold cyan]")
+    console.print(f"  Manifest Version: {manifest_version}")
+    console.print(f"  Total Students: {total_students}")
+    console.print(f"  Model: {manifest_data.get('model', 'unknown')}")
+    console.print(f"  Seed: {manifest_data.get('seed', 'unknown')}")
+    
+    # Count per question and per misconception
+    question_counts = {"Q1": {"SEEDED": 0, "CLEAN": 0}, "Q2": {"SEEDED": 0, "CLEAN": 0}, 
+                       "Q3": {"SEEDED": 0, "CLEAN": 0}, "Q4": {"SEEDED": 0, "CLEAN": 0}}
+    misconception_counts: dict[str, int] = {}
+    
+    for student in students:
+        files = student.get("files", {})
+        for question, info in files.items():
+            q_type = info.get("type", "CLEAN")
+            if question in question_counts:
+                question_counts[question][q_type] = question_counts[question].get(q_type, 0) + 1
+            
+            if q_type == "SEEDED":
+                mis_id = info.get("misconception_id")
+                if mis_id:
+                    misconception_counts[mis_id] = misconception_counts.get(mis_id, 0) + 1
+    
+    # Question distribution table
+    console.print(f"\n[bold]Question Distribution:[/bold]")
+    q_table = Table(show_header=True, header_style="bold")
+    q_table.add_column("Question")
+    q_table.add_column("SEEDED", justify="right")
+    q_table.add_column("CLEAN", justify="right")
+    q_table.add_column("Total", justify="right")
+    
+    total_seeded = 0
+    total_clean = 0
+    for q in ["Q1", "Q2", "Q3", "Q4"]:
+        seeded = question_counts[q]["SEEDED"]
+        clean = question_counts[q]["CLEAN"]
+        total_seeded += seeded
+        total_clean += clean
+        q_table.add_row(q, str(seeded), str(clean), str(seeded + clean))
+    
+    q_table.add_row("[bold]Total[/bold]", f"[bold]{total_seeded}[/bold]", 
+                    f"[bold]{total_clean}[/bold]", f"[bold]{total_seeded + total_clean}[/bold]")
+    console.print(q_table)
+    
+    # Misconception distribution table
+    console.print(f"\n[bold]Misconception Distribution ({len(misconception_counts)} types):[/bold]")
+    m_table = Table(show_header=True, header_style="bold")
+    m_table.add_column("ID")
+    m_table.add_column("Name")
+    m_table.add_column("Category")
+    m_table.add_column("Count", justify="right")
+    m_table.add_column("%", justify="right")
+    
+    # Sort by count descending
+    sorted_miscns = sorted(misconception_counts.items(), key=lambda x: x[1], reverse=True)
+    for mis_id, count in sorted_miscns:
+        gt_entry = gt_map.get(mis_id, {})
+        name = gt_entry.get("name", mis_id)
+        category = gt_entry.get("category", "Unknown")
+        pct = (count / total_seeded * 100) if total_seeded > 0 else 0
+        m_table.add_row(mis_id, name[:30], category[:25], str(count), f"{pct:.1f}%")
+    
+    console.print(m_table)
+    
+    # Summary stats
+    seeded_pct = (total_seeded / (total_seeded + total_clean) * 100) if (total_seeded + total_clean) > 0 else 0
+    console.print(f"\n[bold green]Summary:[/bold green]")
+    console.print(f"  Seeded questions: {total_seeded} ({seeded_pct:.1f}%)")
+    console.print(f"  Clean questions: {total_clean}")
+    console.print(f"  Unique misconception types: {len(misconception_counts)}")
+
+
 if __name__ == "__main__":
     app()
+
