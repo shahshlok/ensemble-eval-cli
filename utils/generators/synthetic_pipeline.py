@@ -96,6 +96,7 @@ class PipelineStats:
     seeded_compile_failures: int = 0
     seeded_test_pass_failures: int = 0  # Seeded passed all tests (bad)
     seeded_no_diff_failures: int = 0  # Seeded is identical to correct (bad)
+    seeded_fallback_to_clean: int = 0  # Students who got 4 clean codes due to seeding failure
     successful_samples: int = 0
     discarded_samples: int = 0
 
@@ -106,6 +107,7 @@ class PipelineStats:
             "seeded_compile_failures": self.seeded_compile_failures,
             "seeded_test_pass_failures": self.seeded_test_pass_failures,
             "seeded_no_diff_failures": self.seeded_no_diff_failures,
+            "seeded_fallback_to_clean": self.seeded_fallback_to_clean,
             "successful_samples": self.successful_samples,
             "discarded_samples": self.discarded_samples,
         }
@@ -118,11 +120,12 @@ class StudentSample:
     folder_name: str
     persona_style: str
     persona_cognitive: str
-    question: str
+    seeded_question: str | None      # Which question has the bug (Q1-Q4) or None
     misconception_id: str | None
     misconception_name: str | None
-    correct_code: str
-    seeded_code: str | None
+    correct_codes: dict[str, str]    # {"Q1": "...", "Q2": "...", ...}
+    seeded_code: str | None          # Only the seeded version of seeded_question
+
 
 
 # ============================================================================
@@ -318,30 +321,36 @@ async def generate_seeded_code(
     correct_code: str,
     misconception: dict[str, Any],
     persona_prompt: str,
+    question: str,
 ) -> str:
     """Inject a misconception into correct code."""
+    explanation = misconception.get("explanation", "")
+    category = misconception.get("category", "Misconception")
+    student_thinking = misconception.get("student_thinking", "")
+    specific_instruction = misconception.get("instructions_for_llm", {}).get(question, "")
+
     system = (
-        f"{persona_prompt} You are now modifying existing code to introduce a specific bug. "
+        f"{persona_prompt} You are a student with a specific misunderstanding of the Notional Machine."
         "Respond with Java source code only, no explanations or markdown fences."
     )
     
-    instruction = misconception.get("misconception_explanation", misconception.get("misconception_name", ""))
-    student_thinking = misconception.get("student_thinking", "")
-    
-    thinking_section = ""
-    if student_thinking:
-        thinking_section = f"\n\nYour mindset as this student: {student_thinking}"
-    
     user = (
-        f"Here is working Java code:\n\n```java\n{correct_code}\n```\n\n"
-        f"Modify this code to introduce the following specific conceptual error:\n"
-        f"{instruction}{thinking_section}\n\n"
-        "IMPORTANT:\n"
-        "- Keep the original coding style and structure.\n"
-        "- Only introduce the specified logical error.\n"
-        "- The code must still compile.\n"
-        "- Do NOT add comments explaining the bug.\n"
-        "Output only the modified Java code."
+        f"Here is a correct solution to the problem:\n"
+        f"```java\n{correct_code}\n```\n\n"
+        f"Your Task: Rewrite this code acting as a student who holds the '{category}' misconception.\n\n"
+        f"Your Mental Model ({category}):\n"
+        f"{explanation}\n\n"
+        f"Your Internal Monologue:\n"
+        f"{student_thinking}\n\n"
+        f"Action Plan:\n"
+        f"{specific_instruction}\n\n"
+        "Instructions:\n"
+        "- You believe your code is correct. Do not intentionally write 'bad' code, but write code that follows your flawed mental model.\n"
+        "- Keep the original coding style (indentation, variable naming) of the provided code.\n"
+        "- Ensure the class name remains the same as in the original code.\n"
+        "- The code MUST compile.\n"
+        "- Do NOT add comments explaining the error.\n"
+        "Output only the rewritten Java code."
     )
     
     response = await client.responses.create(
@@ -368,99 +377,111 @@ async def generate_seeded_code(
 async def generate_sample(
     client: AsyncOpenAI,
     model: str,
-    question: str,
-    question_text: str,
-    question_brief: str,
+    question_texts: dict[str, str],
+    question_briefs: dict[str, str],
     persona: tuple[str, str],
+    seeded_question: str | None,
     misconception: dict[str, Any] | None,
-    test_cases: list[TestCase],
+    all_test_cases: dict[str, list[TestCase]],
     stats: PipelineStats,
 ) -> StudentSample | None:
-    """Generate a single sample (correct + seeded code) with retry logic."""
+    """Generate a complete assignment (all 4 questions) with optional misconception seeding.
+    
+    Args:
+        seeded_question: Which question (Q1-Q4) to inject the misconception into, or None for all clean
+        misconception: The misconception to inject (should be applicable to seeded_question)
+        all_test_cases: Dict mapping question ID to test cases
+    
+    Returns:
+        StudentSample with all 4 correct codes + optionally 1 seeded code, or None if generation failed
+    """
     style_id, cog_id = persona
     persona_prompt = build_persona_prompt(style_id, cog_id)
     
-    # Step 1-3: Generate and validate correct code
-    correct_code = None
-    for attempt in range(MAX_RETRIES):
-        try:
-            code = await generate_correct_code(
-                client, model, question_text, question_brief, persona_prompt, question
-            )
-            
-            # Step 2: Compile check
-            compiles, stderr = compile_java(code)
-            if not compiles:
-                console.print(f"  [yellow]Correct code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
-                stats.correct_compile_failures += 1
-                continue
-            
-            # Step 3: Test check (all must pass)
-            passed, total, failures = run_tests(code, test_cases)
-            if passed < total:
-                console.print(f"  [yellow]Correct code tests failed (attempt {attempt+1}): {passed}/{total}[/yellow]")
-                stats.correct_test_failures += 1
-                continue
-            
-            correct_code = code
-            break
-        except Exception as e:
-            console.print(f"  [red]Error generating correct code: {e}[/red]")
+    correct_codes = {}
     
-    if not correct_code:
-        stats.discarded_samples += 1
-        return None
+    # Step 1-3: Generate and validate correct code for ALL 4 questions
+    for question in ["Q1", "Q2", "Q3", "Q4"]:
+        question_text = question_texts.get(question, "")
+        question_brief = question_briefs.get(question, "")
+        test_cases = all_test_cases.get(question, [])
+        
+        correct_code = None
+        for attempt in range(MAX_RETRIES):
+            try:
+                code = await generate_correct_code(
+                    client, model, question_text, question_brief, persona_prompt, question
+                )
+                
+                # Step 2: Compile check
+                compiles, stderr = compile_java(code)
+                if not compiles:
+                    console.print(f"  [yellow]{question} correct code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
+                    stats.correct_compile_failures += 1
+                    continue
+                
+                # Step 3: Test check (all must pass)
+                passed, total, failures = run_tests(code, test_cases)
+                if passed < total:
+                    console.print(f"  [yellow]{question} correct code tests failed (attempt {attempt+1}): {passed}/{total}[/yellow]")
+                    stats.correct_test_failures += 1
+                    continue
+                
+                correct_code = code
+                break
+            except Exception as e:
+                console.print(f"  [red]Error generating {question} correct code: {e}[/red]")
+        
+        if not correct_code:
+            # Failed to generate correct code for this question → discard entire student
+            stats.discarded_samples += 1
+            return None
+        
+        correct_codes[question] = correct_code
     
-    # If no misconception, just return the correct code
-    if not misconception:
-        return StudentSample(
-            student_id="",
-            folder_name="",
-            persona_style=style_id,
-            persona_cognitive=cog_id,
-            question=question,
-            misconception_id=None,
-            misconception_name=None,
-            correct_code=correct_code,
-            seeded_code=None,
-        )
-    
-    # Step 4-6: Generate and validate seeded code
+    # Step 4-6: Optionally generate seeded code for the designated question
     seeded_code = None
-    for attempt in range(MAX_RETRIES):
-        try:
-            code = await generate_seeded_code(
-                client, model, correct_code, misconception, persona_prompt
-            )
-            
-            # Step 5: Compile check
-            compiles, stderr = compile_java(code)
-            if not compiles:
-                console.print(f"  [yellow]Seeded code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
-                stats.seeded_compile_failures += 1
-                continue
-            
-            # Check if code differs from correct
-            if code.strip() == correct_code.strip():
-                console.print(f"  [yellow]Seeded code identical to correct (attempt {attempt+1})[/yellow]")
-                stats.seeded_no_diff_failures += 1
-                continue
-            
-            # Step 6: Test check (at least 1 must fail)
-            passed, total, failures = run_tests(code, test_cases)
-            if passed == total:
-                console.print(f"  [yellow]Seeded code passed all tests (attempt {attempt+1})[/yellow]")
-                stats.seeded_test_pass_failures += 1
-                continue
-            
-            seeded_code = code
-            break
-        except Exception as e:
-            console.print(f"  [red]Error generating seeded code: {e}[/red]")
     
-    if not seeded_code:
-        stats.discarded_samples += 1
-        return None
+    if seeded_question and misconception:
+        correct_code_for_seeding = correct_codes[seeded_question]
+        test_cases_for_seeding = all_test_cases.get(seeded_question, [])
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                code = await generate_seeded_code(
+                    client, model, correct_code_for_seeding, misconception, persona_prompt, seeded_question
+                )
+                
+                # Step 5: Compile check
+                compiles, stderr = compile_java(code)
+                if not compiles:
+                    console.print(f"  [yellow]{seeded_question} seeded code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
+                    stats.seeded_compile_failures += 1
+                    continue
+                
+                # Check if code differs from correct
+                if code.strip() == correct_code_for_seeding.strip():
+                    console.print(f"  [yellow]{seeded_question} seeded code identical to correct (attempt {attempt+1})[/yellow]")
+                    stats.seeded_no_diff_failures += 1
+                    continue
+                
+                # Step 6: Test check (at least 1 must fail)
+                passed, total, failures = run_tests(code, test_cases_for_seeding)
+                if passed == total:
+                    console.print(f"  [yellow]{seeded_question} seeded code passed all tests (attempt {attempt+1})[/yellow]")
+                    stats.seeded_test_pass_failures += 1
+                    continue
+                
+                seeded_code = code
+                break
+            except Exception as e:
+                console.print(f"  [red]Error generating {seeded_question} seeded code: {e}[/red]")
+        
+        if not seeded_code:
+            # Failed to inject misconception → fallback to clean submission
+            console.print(f"  [cyan]{seeded_question} seeding failed, falling back to clean submission[/cyan]")
+            stats.seeded_fallback_to_clean += 1
+            seeded_question = None  # Mark as clean
     
     stats.successful_samples += 1
     return StudentSample(
@@ -468,12 +489,14 @@ async def generate_sample(
         folder_name="",
         persona_style=style_id,
         persona_cognitive=cog_id,
-        question=question,
-        misconception_id=misconception.get("id"),
-        misconception_name=misconception.get("misconception_name"),
-        correct_code=correct_code,
+        seeded_question=seeded_question if seeded_code else None,
+        misconception_id=misconception.get("id") if seeded_code else None,
+        misconception_name=misconception.get("name") if seeded_code else None,
+        correct_codes=correct_codes,
         seeded_code=seeded_code,
     )
+
+
 
 
 # ============================================================================
@@ -554,26 +577,26 @@ async def run_pipeline(
             # Pick random persona
             style_id, cog_id = random.choice(personas)
             
-            # Pick random question and misconception
-            question = random.choice(list(question_texts.keys()))
-            applicable_miscns = [m for m in misconceptions if question.upper() in [q.upper() for q in m.get("applicable_questions", [])]]
+            # Pick ONE random question to seed
+            seeded_question = random.choice(["Q1", "Q2", "Q3", "Q4"])
+            applicable_miscns = [m for m in misconceptions if seeded_question.upper() in [q.upper() for q in m.get("applicable_questions", [])]]
             misconception = random.choice(applicable_miscns) if applicable_miscns else None
             
             progress.update(task, description=f"Student {i+1}: {folder_name}")
             
-            # Load test cases for this question
-            test_cases = load_test_cases(tests_dir, question)
+            # Load test cases for ALL questions
+            all_test_cases = {q: load_test_cases(tests_dir, q) for q in ["Q1", "Q2", "Q3", "Q4"]}
             
-            # Generate sample
+            # Generate sample (all 4 questions)
             sample = await generate_sample(
                 client=client,
                 model=model,
-                question=question,
-                question_text=question_texts[question],
-                question_brief=question_briefs[question],
+                question_texts=question_texts,
+                question_briefs=question_briefs,
                 persona=(style_id, cog_id),
+                seeded_question=seeded_question,
                 misconception=misconception,
-                test_cases=test_cases,
+                all_test_cases=all_test_cases,
                 stats=stats,
             )
             
@@ -581,18 +604,34 @@ async def run_pipeline(
                 sample.student_id = str(student_id)
                 sample.folder_name = folder_name
                 
-                # Save correct code
+                # Save all 4 correct codes
                 student_correct_dir = correct_dir / folder_name
                 student_correct_dir.mkdir(parents=True, exist_ok=True)
-                (student_correct_dir / f"{question}.java").write_text(sample.correct_code)
+                for question, code in sample.correct_codes.items():
+                    (student_correct_dir / f"{question}.java").write_text(code)
                 
-                # Save seeded code
-                if sample.seeded_code:
-                    student_seeded_dir = output_root / folder_name
-                    student_seeded_dir.mkdir(parents=True, exist_ok=True)
-                    (student_seeded_dir / f"{question}.java").write_text(sample.seeded_code)
+                # Save student submission folder (3 clean + 1 seeded OR 4 clean)
+                student_submission_dir = output_root / folder_name
+                student_submission_dir.mkdir(parents=True, exist_ok=True)
+                
+                for question in ["Q1", "Q2", "Q3", "Q4"]:
+                    if question == sample.seeded_question and sample.seeded_code:
+                        # Use seeded version
+                        (student_submission_dir / f"{question}.java").write_text(sample.seeded_code)
+                    else:
+                        # Use correct version
+                        (student_submission_dir / f"{question}.java").write_text(sample.correct_codes[question])
                 
                 # Add to manifest
+                files_dict = {}
+                for question in ["Q1", "Q2", "Q3", "Q4"]:
+                    is_seeded = (question == sample.seeded_question and sample.seeded_code is not None)
+                    files_dict[question] = {
+                        "type": "SEEDED" if is_seeded else "CLEAN",
+                        "misconception_id": sample.misconception_id if is_seeded else None,
+                        "misconception_name": sample.misconception_name if is_seeded else None,
+                    }
+                
                 manifest_students.append({
                     "folder_name": folder_name,
                     "student_id": student_id,
@@ -600,19 +639,15 @@ async def run_pipeline(
                     "last_name": last,
                     "persona_style": style_id,
                     "persona_cognitive": cog_id,
-                    "files": {
-                        question: {
-                            "type": "SEEDED" if sample.seeded_code else "CLEAN",
-                            "misconception_id": sample.misconception_id,
-                            "misconception_name": sample.misconception_name,
-                        }
-                    }
+                    "files": files_dict
                 })
             
             progress.advance(task)
+
     
     # Save manifest
     manifest = {
+        "manifest_version": "2.0",
         "generated_at": datetime.utcnow().isoformat(),
         "seed": seed,
         "model": model,
@@ -634,6 +669,7 @@ async def run_pipeline(
     console.print(f"  Seeded compile failures: {stats.seeded_compile_failures}")
     console.print(f"  Seeded passed all tests: {stats.seeded_test_pass_failures}")
     console.print(f"  Seeded identical to correct: {stats.seeded_no_diff_failures}")
+    console.print(f"  Seeded fallback to clean: {stats.seeded_fallback_to_clean}")
     console.print(f"\nOutput saved to: {output_root}")
 
 
