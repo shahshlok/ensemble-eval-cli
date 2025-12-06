@@ -29,16 +29,16 @@ def fuzzy_match_misconception(
     detected_name: str,
     detected_description: str,
     groundtruth: list[dict[str, Any]],
-    threshold: float = 0.5,
+    threshold: float = 0.3,  # Lowered for exploratory mode
 ) -> tuple[str | None, float, str]:
     """
     Attempt to match a detected misconception to ground truth using fuzzy matching.
 
     Args:
-        detected_name: The name from LLM detection
-        detected_description: The description from LLM detection
+        detected_name: The inferred_category_name from LLM detection
+        detected_description: The conceptual_gap from LLM detection
         groundtruth: List of groundtruth misconception definitions
-        threshold: Minimum score to consider a match
+        threshold: Minimum score to consider a match (lowered for exploration)
 
     Returns:
         Tuple of (matched_id, confidence_score, match_method)
@@ -50,9 +50,10 @@ def fuzzy_match_misconception(
 
     for gt in groundtruth:
         gt_id = gt.get("id", "")
-        gt_name = gt.get("misconception_name", "")
-        gt_explanation = gt.get("misconception_explanation", "")
+        gt_name = gt.get("name", "")  # Fixed: was misconception_name
+        gt_explanation = gt.get("explanation", "")  # Fixed: was misconception_explanation
         gt_student_thinking = gt.get("student_thinking", "")
+        gt_category = gt.get("category", "")
 
         # Method 1: Direct name matching
         name_seq_score = sequence_similarity(detected_name, gt_name)
@@ -64,7 +65,15 @@ def fuzzy_match_misconception(
             best_match_id = gt_id
             best_method = "name_match"
 
-        # Method 2: Description vs explanation matching
+        # Method 2: Category matching (e.g., "Operator Precedence" vs "Algebraic Syntax Machine")
+        if gt_category:
+            cat_score = token_overlap(detected_name, gt_category)
+            if cat_score > best_score:
+                best_score = cat_score
+                best_match_id = gt_id
+                best_method = "category_match"
+
+        # Method 3: Description vs explanation matching
         if detected_description and gt_explanation:
             desc_score = token_overlap(detected_description, gt_explanation)
             if desc_score > best_score:
@@ -72,7 +81,7 @@ def fuzzy_match_misconception(
                 best_match_id = gt_id
                 best_method = "description_match"
 
-        # Method 3: Check against student_thinking
+        # Method 4: Check against student_thinking
         if detected_description and gt_student_thinking:
             thinking_score = token_overlap(detected_description, gt_student_thinking)
             if thinking_score > best_score:

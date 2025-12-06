@@ -58,12 +58,14 @@ def build_detection_text(detection: dict[str, Any]) -> str:
 def build_groundtruth_text(gt: dict[str, Any]) -> str:
     """Build searchable text from a groundtruth entry."""
     parts = []
-    if gt.get("misconception_name"):
-        parts.append(f"Misconception: {gt['misconception_name']}")
-    if gt.get("misconception_explanation"):
-        parts.append(f"Explanation: {gt['misconception_explanation']}")
+    if gt.get("name"):  # Fixed: was misconception_name
+        parts.append(f"Misconception: {gt['name']}")
+    if gt.get("explanation"):  # Fixed: was misconception_explanation
+        parts.append(f"Explanation: {gt['explanation']}")
     if gt.get("student_thinking"):
         parts.append(f"Student thinking: {gt['student_thinking']}")
+    if gt.get("category"):  # Added: include category for better matching
+        parts.append(f"Category: {gt['category']}")
     return " ".join(parts)
 
 
