@@ -28,8 +28,10 @@ from analyze_cli import (
     MatchMode,
     bootstrap_metrics,
     build_dataframes,
+    compute_cognitive_depth_analysis,
     compute_dataset_summary,
     compute_misconception_recall,
+    compute_potential_recall,
     ensure_asset_dir,
     generate_report,
     generate_run_id,
@@ -284,6 +286,15 @@ async def run_pipeline_async(
         plot_model_agreement_matrix(hybrid_opps, asset_paths["model_agreement_matrix"])
         plot_confidence_calibration_distribution(hybrid_dets, asset_paths["confidence_calibration"])
 
+        # RQ1: Compute Diagnostic Ceiling metrics
+        ceiling_stats = compute_potential_recall(opportunities_df)
+        console.print(f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]")
+
+        # RQ2: Compute Cognitive Depth metrics
+        depth_stats = compute_cognitive_depth_analysis(opportunities_df, groundtruth)
+        if depth_stats["by_depth"] is not None and not depth_stats["by_depth"].empty:
+            console.print(f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]")
+
         # Build asset paths for run-local report
         run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
 
@@ -297,6 +308,9 @@ async def run_pipeline_async(
             dataset_summary=dataset_summary,
             manifest_meta=manifest_meta,
             match_mode="all",
+            ceiling_stats=ceiling_stats,
+            depth_stats=depth_stats,
+            groundtruth=groundtruth,
         )
 
         # Save run

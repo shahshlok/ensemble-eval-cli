@@ -1315,6 +1315,238 @@ def compute_misconception_recall(
     return stats
 
 
+def compute_potential_recall(opportunities: pd.DataFrame) -> dict[str, Any]:
+    """
+    Compute "Potential Recall" (The Diagnostic Ceiling) metrics.
+
+    Potential Recall = (Unique files detected by ANY model/strategy) / (Total seeded files)
+
+    This metric answers RQ1: "What is the theoretical upper bound of LLM detection?"
+
+    Returns a dict with:
+      - potential_recall: float (the ceiling)
+      - average_recall: float (standard mean across all runs)
+      - consistency: float (average / potential, measures reliability)
+      - unique_files_detected: int
+      - total_seeded_files: int
+      - by_misconception: DataFrame with per-misconception potential recall
+    """
+    if opportunities.empty:
+        return {
+            "potential_recall": 0.0,
+            "average_recall": 0.0,
+            "consistency": 0.0,
+            "unique_files_detected": 0,
+            "total_seeded_files": 0,
+            "by_misconception": pd.DataFrame(),
+        }
+
+    # Filter to hybrid matcher if we're in ablation mode
+    if "match_mode" in opportunities.columns:
+        opps = opportunities[opportunities["match_mode"] == "hybrid"].copy()
+    else:
+        opps = opportunities.copy()
+
+    # Create unique file key (student + question)
+    opps["file_key"] = opps["student"] + "_" + opps["question"]
+
+    # Total unique seeded files
+    total_seeded_files = opps["file_key"].nunique()
+
+    # For each unique file, check if ANY model/strategy detected it
+    # Group by file_key, take max of success (1 if any detected, 0 if all missed)
+    file_detection = opps.groupby("file_key")["success"].max().reset_index()
+    unique_files_detected = int(file_detection["success"].sum())
+
+    # Potential Recall = files detected by anyone / total files
+    potential_recall = unique_files_detected / total_seeded_files if total_seeded_files else 0.0
+
+    # Average Recall = standard mean across all opportunities
+    average_recall = float(opps["success"].mean()) if not opps.empty else 0.0
+
+    # Consistency = Average / Potential (how reliable are individual runs?)
+    consistency = average_recall / potential_recall if potential_recall > 0 else 0.0
+
+    # Per-misconception potential recall
+    by_misconception = (
+        opps.groupby("expected_id")
+        .apply(
+            lambda g: pd.Series({
+                "potential_recall": g.groupby("file_key")["success"].max().mean(),
+                "average_recall": g["success"].mean(),
+                "n_files": g["file_key"].nunique(),
+                "n_opportunities": len(g),
+            }),
+            include_groups=False,
+        )
+        .reset_index()
+    )
+    by_misconception["consistency"] = (
+        by_misconception["average_recall"] / by_misconception["potential_recall"]
+    ).fillna(0)
+    by_misconception = by_misconception.sort_values("potential_recall")
+
+    return {
+        "potential_recall": potential_recall,
+        "average_recall": average_recall,
+        "consistency": consistency,
+        "unique_files_detected": unique_files_detected,
+        "total_seeded_files": total_seeded_files,
+        "by_misconception": by_misconception,
+    }
+
+
+def compute_cognitive_depth_analysis(
+    opportunities: pd.DataFrame, groundtruth: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """
+    Analyze detection performance by cognitive depth.
+
+    This metric answers RQ2: "Does LLM diagnostic performance correlate with cognitive depth?"
+
+    Uses the 'cognitive_depth' field in groundtruth.json if present.
+    Falls back to heuristic classification based on category if not.
+
+    Returns a dict with:
+      - by_depth: DataFrame with recall per depth level
+      - depth_gap: float (surface_recall - notional_recall)
+      - is_significant: bool (whether gap exceeds threshold)
+    """
+    if opportunities.empty:
+        return {
+            "by_depth": pd.DataFrame(),
+            "depth_gap": 0.0,
+            "is_significant": False,
+        }
+
+    # Filter to hybrid matcher if in ablation mode
+    if "match_mode" in opportunities.columns:
+        opps = opportunities[opportunities["match_mode"] == "hybrid"].copy()
+    else:
+        opps = opportunities.copy()
+
+    # Build depth lookup from groundtruth
+    depth_lookup = {}
+    # Heuristic: classify based on category if no explicit depth field
+    surface_categories = {"Methods", "Data Types", "Algebraic Reasoning", "State / Representation"}
+    notional_categories = {"Input", "State / Variables", "State / Input", "Input / Data Types"}
+
+    for m in groundtruth:
+        mid = m.get("id", "")
+        explicit_depth = m.get("cognitive_depth")
+        if explicit_depth:
+            depth_lookup[mid] = explicit_depth
+        else:
+            # Fallback heuristic
+            category = m.get("category", "")
+            if category in surface_categories:
+                depth_lookup[mid] = "surface"
+            elif category in notional_categories:
+                depth_lookup[mid] = "notional"
+            else:
+                depth_lookup[mid] = "unknown"
+
+    # Add depth to opportunities
+    opps["cognitive_depth"] = opps["expected_id"].map(depth_lookup).fillna("unknown")
+
+    # Compute recall by depth
+    by_depth = (
+        opps.groupby("cognitive_depth")
+        .agg(
+            recall=("success", "mean"),
+            n=("success", "count"),
+        )
+        .reset_index()
+    )
+
+    # Compute depth gap (surface - notional)
+    surface_recall = by_depth[by_depth["cognitive_depth"] == "surface"]["recall"].values
+    notional_recall = by_depth[by_depth["cognitive_depth"] == "notional"]["recall"].values
+
+    surface_val = float(surface_recall[0]) if len(surface_recall) > 0 else 0.0
+    notional_val = float(notional_recall[0]) if len(notional_recall) > 0 else 0.0
+    depth_gap = surface_val - notional_val
+
+    # Consider significant if gap > 20%
+    is_significant = depth_gap > 0.20
+
+    return {
+        "by_depth": by_depth,
+        "depth_gap": depth_gap,
+        "is_significant": is_significant,
+        "surface_recall": surface_val,
+        "notional_recall": notional_val,
+    }
+
+
+def render_potential_recall_section(ceiling_stats: dict[str, Any]) -> str:
+    """Render markdown section for the Diagnostic Ceiling (RQ1)."""
+    lines = [
+        "## The Diagnostic Ceiling (RQ1)",
+        "",
+        "**Potential Recall** measures the theoretical upper bound: what percentage of seeded errors",
+        "were found by *at least one* model/strategy combination?",
+        "",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| Potential Recall (Ceiling) | {ceiling_stats['potential_recall']:.1%} |",
+        f"| Average Recall (Reliability) | {ceiling_stats['average_recall']:.1%} |",
+        f"| Consistency (Avg/Potential) | {ceiling_stats['consistency']:.1%} |",
+        f"| Unique Files Detected | {ceiling_stats['unique_files_detected']} / {ceiling_stats['total_seeded_files']} |",
+        "",
+    ]
+
+    # Interpretation
+    if ceiling_stats["potential_recall"] > 0.9:
+        lines.append("> [!TIP]")
+        lines.append("> High Ceiling: Most errors are detectable by at least one configuration.")
+    elif ceiling_stats["potential_recall"] < 0.5:
+        lines.append("> [!CAUTION]")
+        lines.append("> Low Ceiling: Many errors are invisible to all model/strategy combinations.")
+
+    if ceiling_stats["consistency"] < 0.5:
+        lines.append("")
+        lines.append("> [!WARNING]")
+        lines.append("> Low Consistency: Individual runs are unreliable even when detection is possible.")
+
+    return "\n".join(lines)
+
+
+def render_cognitive_depth_section(depth_stats: dict[str, Any]) -> str:
+    """Render markdown section for Cognitive Alignment (RQ2)."""
+    by_depth = depth_stats.get("by_depth", pd.DataFrame())
+    if by_depth.empty:
+        return ""
+
+    lines = [
+        "## Cognitive Alignment (RQ2)",
+        "",
+        "Does LLM performance correlate with the **cognitive depth** of the misconception?",
+        "",
+        "| Depth Level | Recall | N |",
+        "|-------------|--------|---|",
+    ]
+
+    for _, row in by_depth.iterrows():
+        lines.append(f"| {row['cognitive_depth']} | {row['recall']:.1%} | {int(row['n'])} |")
+
+    lines.extend([
+        "",
+        f"**Depth Gap (Surface - Notional):** {depth_stats['depth_gap']:.1%}",
+        "",
+    ])
+
+    if depth_stats["is_significant"]:
+        lines.append("> [!IMPORTANT]")
+        lines.append("> Significant Depth Gap: LLMs detect Surface errors far better than Notional Machine violations.")
+        lines.append("> This supports the hypothesis that LLMs act as 'Compiler++' rather than 'Pedagogical Tutors'.")
+    else:
+        lines.append("> [!NOTE]")
+        lines.append("> No significant depth gap observed in this run.")
+
+    return "\n".join(lines)
+
+
 def render_misconception_table(stats: pd.DataFrame) -> str:
     """Render markdown table of per-misconception recall."""
     if stats.empty:
@@ -1454,9 +1686,13 @@ def generate_report(
     dataset_summary: dict[str, Any] | None = None,
     manifest_meta: dict[str, Any] | None = None,
     match_mode: str = "hybrid",
+    ceiling_stats: dict[str, Any] | None = None,
+    depth_stats: dict[str, Any] | None = None,
+    groundtruth: list[dict[str, Any]] | None = None,
 ) -> str:
     ts = datetime.now(timezone.utc).isoformat()
     is_ablation = "match_mode" in metrics.columns
+
 
     report = [
         "# LLM Misconception Detection: Analysis Report",
@@ -1506,8 +1742,19 @@ def generate_report(
             ]
         )
 
+    # RQ1: Diagnostic Ceiling section
+    if ceiling_stats:
+        report.append(render_potential_recall_section(ceiling_stats))
+        report.append("")
+
+    # RQ2: Cognitive Alignment section
+    if depth_stats:
+        report.append(render_cognitive_depth_section(depth_stats))
+        report.append("")
+
     # Ablation section (only when running all matchers)
     if is_ablation:
+
         report.extend(
             [
                 "## Matcher Ablation: Fuzzy vs Semantic vs Hybrid",
@@ -2057,6 +2304,15 @@ def main(
         plot_model_agreement_matrix(opportunities_df, asset_paths["model_agreement_matrix"])
         plot_confidence_calibration_distribution(detections_df, asset_paths["confidence_calibration"])
 
+    # Compute RQ1: Diagnostic Ceiling metrics
+    ceiling_stats = compute_potential_recall(opportunities_df)
+    console.print(f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]")
+
+    # Compute RQ2: Cognitive Depth metrics
+    depth_stats = compute_cognitive_depth_analysis(opportunities_df, groundtruth)
+    if depth_stats["by_depth"] is not None and not depth_stats["by_depth"].empty:
+        console.print(f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]")
+
     # Build asset paths for run-local report (relative to run directory)
     run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
 
@@ -2070,6 +2326,9 @@ def main(
         dataset_summary=dataset_summary,
         manifest_meta=manifest_meta,
         match_mode=match_mode.value,
+        ceiling_stats=ceiling_stats,
+        depth_stats=depth_stats,
+        groundtruth=groundtruth,
     )
 
     # Save run to runs/ directory
