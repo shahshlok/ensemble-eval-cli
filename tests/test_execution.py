@@ -11,7 +11,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from utils.execution import compile_java
+from utils.execution import compile_java_with_rename
 
 console = Console()
 
@@ -30,13 +30,32 @@ def load_manifest(assignment_dir: Path) -> dict:
     return json.loads(manifest_path.read_text())
 
 
-def get_expected_compile_status(manifest: dict, student_folder: str, question: str) -> bool | None:
+def load_groundtruth(assignment: str) -> dict[str, dict]:
+    """Load groundtruth.json and index by misconception ID."""
+    gt_path = Path(f"data/{assignment}/groundtruth.json")
+    if not gt_path.exists():
+        console.print(f"[red]Groundtruth not found: {gt_path}[/red]")
+        return {}
+    data = json.loads(gt_path.read_text())
+    return {item["id"]: item for item in data}
+
+
+# Misconception error classes that cause compilation failures
+COMPILE_ERROR_CLASSES = {"Compile-Error", "Compile-Warning-Logic"}
+
+
+def get_expected_compile_status(
+    manifest: dict,
+    groundtruth: dict[str, dict],
+    student_folder: str,
+    question: str,
+) -> bool | None:
     """
-    Determine if a file should compile based on its misconception type.
+    Determine if a file should compile based on its misconception's error_class.
 
     Returns:
-        True if expected to compile (Clean or Logic error)
-        False if expected to fail (Syntax error)
+        True if expected to compile (Clean, or Runtime-* error class)
+        False if expected to fail (Compile-Error or Compile-Warning-Logic)
         None if unknown
     """
     for student in manifest.get("students", []):
@@ -45,15 +64,21 @@ def get_expected_compile_status(manifest: dict, student_folder: str, question: s
             file_type = file_info.get("type", "UNKNOWN")
 
             if file_type == "CLEAN":
-                return True  # Should compile
+                return True  # Clean files should compile
 
             if file_type == "SEEDED":
-                # Check if it's a syntax-related misconception
                 miscon_id = file_info.get("misconception_id", "")
-                # Syntax errors typically have SYN- prefix or contain "syntax"
-                if miscon_id and ("SYN" in miscon_id.upper() or "SYNTAX" in miscon_id.upper()):
-                    return False  # Should NOT compile
-                return True  # Logic errors should compile
+                if not miscon_id:
+                    return True  # No misconception = should compile
+
+                # Look up the error_class in groundtruth
+                miscon_def = groundtruth.get(miscon_id, {})
+                error_class = miscon_def.get("error_class", "")
+
+                # Only Compile-Error types should fail compilation
+                if error_class in COMPILE_ERROR_CLASSES:
+                    return False  # Expected to NOT compile
+                return True  # Runtime errors should compile
 
     return None
 
@@ -65,6 +90,10 @@ def test_assignment(assignment_dir: Path, assignment_name: str) -> dict:
     manifest = load_manifest(assignment_dir)
     if not manifest:
         return {}
+
+    # Extract assignment name (a2, a3) from the directory
+    assignment = manifest.get("assignment", assignment_dir.name)
+    groundtruth = load_groundtruth(assignment)
 
     stats = {
         "total": 0,
@@ -89,9 +118,9 @@ def test_assignment(assignment_dir: Path, assignment_name: str) -> dict:
             question = java_file.stem  # e.g., "Q1"
 
             stats["total"] += 1
-            result = compile_java(java_file)
+            result = compile_java_with_rename(java_file)
 
-            expected = get_expected_compile_status(manifest, student_folder, question)
+            expected = get_expected_compile_status(manifest, groundtruth, student_folder, question)
 
             if result.success:
                 stats["compiled"] += 1

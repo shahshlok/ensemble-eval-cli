@@ -25,7 +25,7 @@
 **Goal:** Prove that grading rubrics blind LLMs to deep misconceptions by forcing "Compliance Mode."
 
 ### 2.1 "Pure Discovery" Prompt Suite
-Create `prompts/pure_discovery.py` with three rubric-free strategies:
+Create `prompts/pure_discovery.py` with three rubric-free strategies:caffeinate -dim uv run python pipeline.py run --skip-generation --run-tag "a3-balanced" --notes "10 surface 10 notional" --yescaffeinate -dim uv run python pipeline.py run --skip-generation --run-tag "a3-balanced" --notes "10 surface 10 notional" --yes
 1.  **`discovery_minimal`**: "List conceptual misconceptions. Ignore syntax." (Baseline discovery)
 2.  **`discovery_mental_model`**: "Reconstruct the student's mental model. Where does it diverge?" (Targeting intent)
 3.  **`discovery_debugger`**: "Find the logic bug and explain the root cause." (Targeting runtime logic)

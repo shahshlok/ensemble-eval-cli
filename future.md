@@ -44,8 +44,21 @@ Current findings suggest LLMs struggle with variable state (e.g., `v1` vs `v0`).
 - **Average Recall (The Reliability):** The standard mean recall across all runs. Measures how likely a single agent is to succeed.
 - **Consistency:** Measures stability. If we run the same model multiple times (or different models), do they agree? quantifying the "noise" in LLM grading.
 
-
 ### 4. Rubric Bias Experiment
 Does removing the rubric cause LLMs to perform better on deep misconceptions?
+
+### 5. Hybrid Verification Pipeline (The "Truth" Hierarchy)
+To eliminate "validity circularity" (using LLMs to check LLMs), we will implement a tiered verification system that prioritizes deterministic checks.
+
+*   **Tier 1: Compiler Strictness (Syntax/API Errors)**
+    *   **Action:** Run `javac`.
+    *   **Rule:** If the seed is a Syntax Error (e.g., `TYP-01`), `exit_code` **MUST** be non-zero. If it compiles, the generator auto-corrected it → **Discard**.
+*   **Tier 2: Differential Execution (Logic/State Errors)**
+    *   **Action:** Run the *Seeded* code and the *Clean* code (generated in the same batch) against the same input.
+    *   **Rule:** `Output(Seeded) != Output(Clean)`. If outputs are identical, the generator auto-corrected the logic → **Discard**.
+    *   **Benefit:** Requires no custom test cases, just a comparison against the "Gold Standard" clean version.
+*   **Tier 3: Semantic Auditor (Mental Models)**
+    *   **Action:** LLM Check (e.g., `gpt-4o-mini`).
+    *   **Scope:** *Only* used for "Intent" or "Comment-based" misconceptions where runtime behavior might not change but the student's explanation is wrong.
 
 ---
