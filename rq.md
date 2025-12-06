@@ -1,41 +1,41 @@
-# Research Questions
-
-Based on the project's thesis and goals outlined in `AGENTS.md`.
+# Research Questions & Thesis
 
 ## Thesis Statement
-> "We conducted a controlled ablation study to define the 'Diagnostic Ceiling' of modern LLMs. We prove that while LLMs have solved Syntax/API misconceptions (approaching 100% recall), they remain statistically incompetent at diagnosing State/Logic flow (often <25% recall), regardless of model size or prompting strategy. Furthermore, complex pedagogical prompting (e.g., Socratic) often degrades diagnostic performance compared to zero-shot classification."
+> "We define the **'Notional Machine Gap'** in Large Language Models. Through a controlled ablation study across increasing state complexity (Scalar → Temporal → Spatial → Heap), we demonstrate that LLM diagnostic capability is inversely proportional to the abstraction level of the Notional Machine. While LLMs achieve near-perfect recall on Syntax and API misconceptions, they exhibit a 'Diagnostic Ceiling' on mental models involving state and sequence, often failing to distinguish between student intent and valid execution flow. Furthermore, we identify a **'Prompting Paradox'**: mechanical prompting strategies (e.g., Chain-of-Thought) significantly outperform pedagogical role-playing (e.g., Socratic tutors), suggesting that 'sounding like a teacher' inhibits the model's ability to 'see like a machine'."
+
+---
 
 ## Primary Research Questions
 
-### 1. The Diagnostic Ceiling
-**Question:** What is the theoretical upper bound of LLM detection capabilities on controlled (seeded) data?
+### RQ1. The Notional Machine Hierarchy (formerly Diagnostic Ceiling)
+**Question:** Does LLM diagnostic performance degrade predictably as the **Notional Machine** complexity increases?
+
+**Hypothesis:** We hypothesize a distinct performance tier list:
+1.  **Scalar State (High Performance):** Simple variable assignment (`A1`).
+2.  **Temporal State (Medium Performance):** Control flow and loops (`A2`).
+3.  **Spatial/Referential State (Low Performance):** Arrays and Objects (`A3/A4`).
+*   **Goal:** To prove that LLMs are "State Blind"—they struggle to track data lifecycles across time (loops) and space (memory heaps).
+
+### RQ2. Failure Boundaries (The "Invisible" Misconceptions)
+**Question:** Which specific **Mental Models** are invisible to LLMs?
 
 **Explanation:**
-Before deploying LLMs in real classrooms, we must establish a baseline of "competence" under ideal conditions (Sensitivity Analysis). If an LLM cannot detect a clearly defined, isolated error in a synthetic submission, it cannot be trusted to find ambiguous errors in real student code. This question seeks to define the "best case scenario"—the maximum potential recall for current models.
+We classify errors not by syntax, but by the flawed *Notional Machine* the student holds. We investigate detection rates for:
+*   **The Reactive State Machine:** Believing variables update automatically (Spreadsheet View).
+*   **The Anthropomorphic I/O:** Believing the computer "understands" prompts pragmatically.
+*   **The Teleological Flow:** Believing code executes based on "intent" rather than strict sequence.
+*   **Goal:** To create a taxonomy of errors that are "safe" for AI to grade vs. those requiring human intervention.
 
-### 2. Cognitive Alignment (formerly Failure Boundaries)
-**Question:** Does LLM diagnostic performance correlate with the **cognitive depth** of the misconception?
-
-**Explanation:**
-We hypothesize a "Depth-Performance Gap."
-*   **Surface Errors:** Syntax slips and API misuse (e.g., `Math.pow` args).
-*   **Deep Misconceptions:** Structural flaws in the **Notional Machine** (e.g., `STA-01 Spreadsheet View`) or **Negative Transfer** (e.g., `ALG-01 Precedence Blindness`).
-This RQ investigates if models are "blind" specifically to errors that require modeling the student's *intent* vs. the code's *execution*. If models fail on Notional Machine violations while solving Syntax errors, they are acting as "Compiler++" rather than "Pedagogical Tutors."
-
-### 3. The Pedagogical Discord (formerly Prompting Paradox)
-**Question:** Do "pedagogically valid" prompts improve or degrade diagnostic accuracy?
+### RQ3. The Prompting Paradox
+**Question:** Does **Pedagogical Role-Playing** (Socratic Method) degrade diagnostic accuracy compared to **Mechanical Simulation** (Chain-of-Thought)?
 
 **Explanation:**
-Educational theory suggests tutors should act as Socratic guides, interpreting the student's intent (addressing the **Superbug**). However, preliminary data suggests that "Act as a Tutor" prompts perform *worse* than "Find the Bug" prompts. This RQ investigates if the linguistic complexity of pedagogical role-playing introduces noise that masks the model's ability to analyze strict logic/state, effectively decoupling "sounding like a teacher" from "seeing like a teacher."
+Instructional design suggests tutors should focus on the student's "Mental Model." However, asking an LLM to "act as a tutor" may introduce linguistic noise or hallucinated empathy.
+*   **Comparison:** We test `Zero-Shot Baseline` vs. `Taxonomy-Primed` vs. `Chain-of-Thought (Trace)` vs. `Socratic Persona`.
+*   **Goal:** To prove that the best way to make an LLM a good teacher is to force it to act like a rigid runtime environment first.
 
-### 4. The Rubric Blinder Effect
-**Question:** Does the presence of a grading rubric strictly constrain the model's attention to surface features?
-
-**Explanation:**
-Rubrics in CS1 are typically functional (e.g., "Program outputs correct distance: 2 points"). We hypothesize that providing these strict criteria biases the LLM towards acting as a "Grader" (verifying compliance) rather than a "Diagnostician" (analyzing intent). Removing the rubric might paradoxically *increase* detection of deep misconceptions by freeing the model's attention to look for structural anomalies rather than checkbox items.
-
-### 5. Generalizability across Domains
-**Question:** Is the "State vs. Syntax" failure pattern robust across different CS1 topics?
+### RQ4. Generalizability (The Cross-Domain Verification)
+**Question:** Is the "State Blindness" observed in basic arithmetic (`A1`) structurally identical to the failure patterns in Object-Oriented Programming (`A4`)?
 
 **Explanation:**
-To prove these limitations are fundamental to LLM reasoning (and not just artifacts of one assignment), we replicate the study across distinct cognitive domains (e.g., Kinematics/Variables vs. String Processing/Arrays). We expect the specific misconceptions to change, but the *structural inability* to detect Notional Machine violations to remain constant.
+If the LLM fails to detect "Spreadsheet View" in A1 (Scalar) and "Aliasing" in A4 (Heap), it suggests a fundamental limitation in the Transformer architecture's ability to model *indirection*, regardless of the domain topic.
