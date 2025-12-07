@@ -42,7 +42,7 @@ app = typer.Typer(help="Generate synthetic student submissions with seeded misco
 
 DEFAULT_MODEL = "gpt-5.1-2025-11-13"
 DEFAULT_STUDENT_COUNT = 10
-DEFAULT_ASSIGNMENT = "a1"
+DEFAULT_ASSIGNMENT = "a2"
 MAX_RETRIES = 3
 
 # ============================================================================
@@ -213,14 +213,9 @@ def run_java(java_source: str, stdin_input: str, timeout: float = 10.0) -> tuple
 # Test Case Loading
 # ============================================================================
 
-def load_test_cases(tests_dir: Path, question: str) -> list[TestCase]:
-    """Load test cases from the tests directory for a specific question."""
-    question_dir = tests_dir / "reference"
-    # For now, we'll use the reference solutions to validate
-    # In the full implementation, we'd run JUnit tests
-    
-    # Simple test case loading from the question prompts
-    test_cases = {
+# Test cases by assignment
+TEST_CASES = {
+    "a1": {
         "Q1": [
             TestCase("sample", "3 30.4 1.5", "18.266666666666666"),
             TestCase("simple", "0 100 10", "10.0"),
@@ -239,8 +234,51 @@ def load_test_cases(tests_dir: Path, question: str) -> list[TestCase]:
             TestCase("sample", "0 0\n5 0\n0 5", "12.5"),
             TestCase("right", "0 0\n3 0\n0 4", "6.0"),
         ],
-    }
-    return test_cases.get(question, [])
+    },
+    "a2": {
+        "Q1": [
+            TestCase("sample", "3 8 2 7 4", "14"),
+            TestCase("all_evens", "2 4 6 8 10", "30"),
+            TestCase("no_evens", "1 3 5 7 9", "0"),
+        ],
+        "Q2": [
+            # Guessing game - just check it terminates and says "Correct"
+            TestCase("exhaust", "\n".join(str(i) for i in range(1, 101)), "Correct"),
+        ],
+        "Q3": [
+            TestCase("A_grade", "95", "A"),
+            TestCase("B_grade", "85", "B"),
+            TestCase("C_grade", "75", "C"),
+            TestCase("D_grade", "65", "D"),
+            TestCase("F_grade", "55", "F"),
+        ],
+        "Q4": [
+            TestCase("height_4", "4", "****"),
+            TestCase("height_1", "1", "*"),
+        ],
+    },
+}
+
+# Question briefs by assignment
+QUESTION_BRIEFS = {
+    "a1": {
+        "Q1": "Acceleration: compute (v1 - v0) / t using user input.",
+        "Q2": "Road trip cost: (distance / mpg) * price using user input.",
+        "Q3": "Distance between two points using sqrt((x2-x1)^2 + (y2-y1)^2).",
+        "Q4": "Triangle area with Heron's formula; sides from point distances.",
+    },
+    "a2": {
+        "Q1": "Sum of Even Numbers: read 5 integers, print sum of evens only.",
+        "Q2": "Number Guessing Game: random 1-100, loop until correct with hints.",
+        "Q3": "Grade Calculator: numeric grade to letter (A/B/C/D/F).",
+        "Q4": "Right Triangle: print N rows of asterisks (1 to N stars).",
+    },
+}
+
+
+def load_test_cases(assignment: str, question: str) -> list[TestCase]:
+    """Load test cases for a specific assignment and question."""
+    return TEST_CASES.get(assignment, {}).get(question, [])
 
 
 def run_tests(java_source: str, test_cases: list[TestCase]) -> tuple[int, int, list[str]]:
@@ -534,12 +572,7 @@ async def run_pipeline(
     }
     question_texts = {q: f.read_text() for q, f in question_files.items() if f.exists()}
     
-    question_briefs = {
-        "Q1": "Acceleration: compute (v1 - v0) / t using user input.",
-        "Q2": "Road trip cost: (distance / mpg) * price using user input.",
-        "Q3": "Distance between two points using sqrt((x2-x1)^2 + (y2-y1)^2).",
-        "Q4": "Triangle area with Heron's formula; sides from point distances.",
-    }
+    question_briefs = QUESTION_BRIEFS.get(assignment, QUESTION_BRIEFS["a2"])
     
     # Setup output directories
     correct_dir = output_root / "correct"
@@ -585,7 +618,7 @@ async def run_pipeline(
             progress.update(task, description=f"Student {i+1}: {folder_name}")
             
             # Load test cases for ALL questions
-            all_test_cases = {q: load_test_cases(tests_dir, q) for q in ["Q1", "Q2", "Q3", "Q4"]}
+            all_test_cases = {q: load_test_cases(assignment, q) for q in ["Q1", "Q2", "Q3", "Q4"]}
             
             # Generate sample (all 4 questions)
             sample = await generate_sample(
@@ -678,7 +711,7 @@ def generate(
     assignment: str = typer.Option(DEFAULT_ASSIGNMENT, help="Assignment ID (a1, a2, etc.)"),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to generate"),
     model: str = typer.Option(DEFAULT_MODEL, help="OpenAI model to use"),
-    output: Path = typer.Option(Path("authentic_seeded/a1"), help="Output directory"),
+    output: Path = typer.Option(Path("authentic_seeded/a2"), help="Output directory"),
     seed: int = typer.Option(None, help="Random seed (default: current timestamp)"),
 ):
     """Generate synthetic student submissions with seeded misconceptions."""
