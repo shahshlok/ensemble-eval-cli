@@ -655,7 +655,7 @@ def plot_precision_recall_scatter(metrics: pd.DataFrame, path: Path) -> Path:
 
     # Dynamic colors based on models present in data
     model_colors = get_model_colors(models)
-    markers = {"baseline": "o", "minimal": "s", "rubric_only": "^", "socratic": "D"}
+    markers = {"baseline": "o", "taxonomy": "s", "cot": "^", "socratic": "D"}
 
     for _, row in df.iterrows():
         model = row["model_short"]
@@ -943,7 +943,7 @@ def plot_matcher_strategy_grid(metrics: pd.DataFrame, path: Path) -> Path:
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    strategies = ["baseline", "minimal", "rubric_only", "socratic"]
+    strategies = ["baseline", "taxonomy", "cot", "socratic"]
     matchers = ["fuzzy_only", "semantic_only", "hybrid"]
     x = np.arange(len(strategies))
     width = 0.25
@@ -1757,7 +1757,7 @@ def render_dataset_summary(
         f"- **Match mode:** {match_mode}",
         "- **Embedding model:** text-embedding-3-large (OpenAI)",
         f"- **Detection models:** {', '.join(MODEL_SHORT_NAMES.values())}",
-        "- **Strategies:** baseline, minimal, rubric_only, socratic",
+        "- **Strategies:** baseline, taxonomy, cot, socratic",
         "",
     ]
     return "\n".join(lines)
@@ -1832,11 +1832,6 @@ def generate_report(
     # RQ1: Diagnostic Ceiling section
     if ceiling_stats:
         report.append(render_potential_recall_section(ceiling_stats))
-        report.append("")
-
-    # RQ2: Cognitive Alignment section
-    if depth_stats:
-        report.append(render_cognitive_depth_section(depth_stats))
         report.append("")
 
     # Ablation section (only when running all matchers)
@@ -1986,7 +1981,7 @@ def generate_report(
             "",
             "## Methods",
             "- Data: 60 students × 4 questions (seeded/clean) with manifest-driven ground truth.",
-            f"- Detection: {', '.join(MODEL_SHORT_NAMES.values())} across strategies (baseline, minimal, rubric_only, socratic).",
+            f"- Detection: {', '.join(MODEL_SHORT_NAMES.values())} across strategies (baseline, taxonomy, cot, socratic).",
         ]
     )
 
@@ -2158,7 +2153,7 @@ def save_run(
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "dataset": {
-            "assignment": "A2",
+            "assignment": "A1",
             "seed": manifest_meta.get("seed"),
             "generation_model": manifest_meta.get("model"),
             "generated_at": manifest_meta.get("generated_at"),
