@@ -78,7 +78,6 @@ DO report:
 - Logic errors that suggest flawed mental models
 - Incorrect assumptions about program execution
 
-{OUTPUT_SCHEMA}
 '''.strip()
 
 
@@ -128,8 +127,6 @@ Analyze the code for notional machine misconceptions. For each misconception:
 - Name the category (use your own words, don't just copy the taxonomy names)
 - Explain what the student believes vs. reality
 - Point to specific evidence
-
-{OUTPUT_SCHEMA}
 '''.strip()
 
 
@@ -171,8 +168,6 @@ Step through this code systematically:
    - Explain the gap between belief and reality
 
 Show your work, then output the final JSON.
-
-{OUTPUT_SCHEMA}
 '''.strip()
 
 
@@ -210,7 +205,6 @@ For each flawed belief you identify:
 
 Be empathetic - these are common, reasonable mistakes for beginners.
 
-{OUTPUT_SCHEMA}
 '''.strip()
 
 
