@@ -59,9 +59,9 @@ STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
 MAX_CONCURRENCY = 30
 
 # Paths
-SUBMISSION_DIR = Path("authentic_seeded/a2")
-DEFAULT_OUTPUT_DIR = Path("detections/a2")
-QUESTIONS_DIR = Path("data/a2")
+SUBMISSION_DIR = Path("authentic_seeded/a3")
+DEFAULT_OUTPUT_DIR = Path("detections/a3")
+QUESTIONS_DIR = Path("data/a3")
 
 # ============================================================================
 # Data Loading
