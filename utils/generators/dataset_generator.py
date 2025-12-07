@@ -42,7 +42,7 @@ app = typer.Typer(help="Generate synthetic student submissions with seeded misco
 
 DEFAULT_MODEL = "gpt-5.1-2025-11-13"
 DEFAULT_STUDENT_COUNT = 10
-DEFAULT_ASSIGNMENT = "a2"
+DEFAULT_ASSIGNMENT = "a3"
 MAX_RETRIES = 3
 
 # ============================================================================
@@ -273,6 +273,34 @@ TEST_CASES = {
             TestCase("height_3_last_row", "3", "***"),
         ],
     },
+    "a3": {
+        "Q1": [
+            # Index-value confusion: if (i == target) when target=20, would find at i=20 (out of bounds or wrong)
+            # Use array where target is NOT at its own index value
+            TestCase("found", "5\n10 20 30 20 50\n20", "1"),  # 20 is at index 1, not index 20
+            # Off-by-one: i=1 to N would miss index 0
+            TestCase("first_element", "4\n99 10 20 30\n99", "0"),  # Target at index 0
+            TestCase("not_found", "3\n1 2 3\n5", "-1"),
+        ],
+        "Q2": [
+            # Parallel array desync: sorting scores but not names
+            # Use data where after sort, the last name (Charlie) does NOT match highest score (Bob=92)
+            TestCase("sample", "3\nAlice Bob Charlie\n85 92 78", "Bob", forbidden_output="Charlie"),
+        ],
+        "Q3": [
+            # String immutability: calling toUpperCase() without assignment
+            # Check for uppercase result - immutability bug prints lowercase
+            TestCase("sample", "hello world", "HELLO_WORLD", forbidden_output="hello"),
+            TestCase("mixed", "Java Code", "JAVA_CODE", forbidden_output="Java"),
+        ],
+        "Q4": [
+            # Lossy swap: overwrites before saving last element
+            # Expected: 4 1 2 3 (last wraps to first)
+            # Lossy bug: 1 1 1 1 (all become first element)
+            TestCase("sample", "4\n1 2 3 4", "4 1 2 3", forbidden_output="1 1 1 1"),
+            TestCase("distinct", "3\n7 8 9", "9 7 8", forbidden_output="7 7 7"),
+        ],
+    },
 }
 
 # Question briefs by assignment
@@ -288,6 +316,12 @@ QUESTION_BRIEFS = {
         "Q2": "Number Guessing Game: random 1-100, loop until correct with hints.",
         "Q3": "Grade Calculator: numeric grade to letter (A/B/C/D/F).",
         "Q4": "Right Triangle: print N rows of asterisks (1 to N stars).",
+    },
+    "a3": {
+        "Q1": "Find First Occurrence: search array for target, return index or -1.",
+        "Q2": "Student Leaderboard: parallel arrays, sort by score, print top student.",
+        "Q3": "String Shouter: uppercase and replace spaces with underscores.",
+        "Q4": "Array Right Shift: rotate array elements one position right.",
     },
 }
 
@@ -739,7 +773,7 @@ def generate(
     assignment: str = typer.Option(DEFAULT_ASSIGNMENT, help="Assignment ID (a1, a2, etc.)"),
     students: int = typer.Option(DEFAULT_STUDENT_COUNT, help="Number of students to generate"),
     model: str = typer.Option(DEFAULT_MODEL, help="OpenAI model to use"),
-    output: Path = typer.Option(Path("authentic_seeded/a2"), help="Output directory"),
+    output: Path = typer.Option(Path("authentic_seeded/a3"), help="Output directory"),
     seed: int = typer.Option(None, help="Random seed (default: current timestamp)"),
 ):
     """Generate synthetic student submissions with seeded misconceptions."""
