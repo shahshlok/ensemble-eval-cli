@@ -8,7 +8,6 @@ This will prompt for configuration and run all steps.
 """
 
 import asyncio
-import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -37,6 +36,7 @@ from analyze_cli import (
     generate_run_id,
     load_groundtruth,
     load_manifest,
+    mcnemar,
     plot_confidence_calibration_distribution,
     plot_hallucinations,
     plot_matcher_ablation,
@@ -53,15 +53,12 @@ from analyze_cli import (
     plot_topic_recall_by_model,
     save_run,
     summarize_metrics,
-    cohen_kappa,
-    mcnemar,
 )
 from llm_miscons_cli import (
     DEFAULT_OUTPUT_DIR as DETECTIONS_DIR,
 )
 from llm_miscons_cli import (
     MODELS,
-    MODEL_SHORT_NAMES,
     STRATEGIES,
     get_student_list,
     run_detection,
@@ -73,6 +70,8 @@ from llm_miscons_cli import (
 # Import from existing modules
 from utils.generators.dataset_generator import (
     DEFAULT_MODEL,
+)
+from utils.generators.dataset_generator import (
     run_pipeline as run_synthetic_pipeline,
 )
 
@@ -273,6 +272,7 @@ async def run_pipeline_async(
 
         # Build agreement data for McNemar chart
         from itertools import combinations
+
         agreement_rows = []
         for strategy, grp in hybrid_opps.groupby("strategy"):
             models = sorted(grp["model"].unique())
@@ -281,21 +281,27 @@ async def run_pipeline_async(
                 b_res = grp[grp["model"] == model_b]["success"].tolist()
                 if len(a_res) == len(b_res):
                     stat, p, _ = mcnemar(a_res, b_res)
-                    agreement_rows.append({
-                        "model_a": model_a.split("/")[-1],
-                        "model_b": model_b.split("/")[-1],
-                        "mcnemar_p": p,
-                    })
+                    agreement_rows.append(
+                        {
+                            "model_a": model_a.split("/")[-1],
+                            "model_b": model_b.split("/")[-1],
+                            "mcnemar_p": p,
+                        }
+                    )
         plot_mcnemar_bar_chart(agreement_rows, asset_paths["mcnemar_chart"])
 
         # RQ1: Compute Diagnostic Ceiling metrics
         ceiling_stats = compute_potential_recall(opportunities_df)
-        console.print(f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]")
+        console.print(
+            f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]"
+        )
 
         # RQ2: Compute Cognitive Depth metrics
         depth_stats = compute_cognitive_depth_analysis(opportunities_df, groundtruth)
         if depth_stats["by_depth"] is not None and not depth_stats["by_depth"].empty:
-            console.print(f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]")
+            console.print(
+                f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]"
+            )
 
         # Build asset paths for run-local report
         run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
@@ -408,7 +414,9 @@ def interactive():
     strategy_list = STRATEGIES  # All strategies
     model_count = len(MODELS) * 2 if include_reasoning else len(MODELS)
     console.print(f"[dim]Strategies: {', '.join(STRATEGIES)}[/dim]")
-    console.print(f"[dim]Models: {model_count} ({len(MODELS)} standard{' + ' + str(len(MODELS)) + ' reasoning' if include_reasoning else ''})[/dim]")
+    console.print(
+        f"[dim]Models: {model_count} ({len(MODELS)} standard{' + ' + str(len(MODELS)) + ' reasoning' if include_reasoning else ''})[/dim]"
+    )
 
     console.print()
 
@@ -497,7 +505,9 @@ def run_cmd(
     concurrency: int = typer.Option(20, help="Max concurrent API requests"),
     force: bool = typer.Option(False, help="Overwrite existing manifest"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    reasoning: bool = typer.Option(True, "--reasoning/--no-reasoning", help="Include reasoning model variants"),
+    reasoning: bool = typer.Option(
+        True, "--reasoning/--no-reasoning", help="Include reasoning model variants"
+    ),
 ):
     """
     Run the full research pipeline (non-interactive).

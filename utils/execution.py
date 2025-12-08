@@ -7,7 +7,6 @@ No legacy code, no fallbacks - just the essentials.
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -17,6 +16,7 @@ from pathlib import Path
 @dataclass
 class CompileResult:
     """Result of Java compilation."""
+
     success: bool
     stderr: str
 
@@ -24,6 +24,7 @@ class CompileResult:
 @dataclass
 class RunResult:
     """Result of Java execution."""
+
     success: bool
     stdout: str
     stderr: str
@@ -32,16 +33,16 @@ class RunResult:
 
 def extract_class_name(java_source: str) -> str | None:
     """Extract the main class name from Java source code.
-    
+
     Checks for public class first, then any class.
     """
     # Try public class first
-    match = re.search(r'\bpublic\s+class\s+(\w+)', java_source)
+    match = re.search(r"\bpublic\s+class\s+(\w+)", java_source)
     if match:
         return match.group(1)
-    
+
     # Any class
-    match = re.search(r'\bclass\s+(\w+)', java_source)
+    match = re.search(r"\bclass\s+(\w+)", java_source)
     return match.group(1) if match else None
 
 
@@ -52,7 +53,7 @@ def compile_and_run(
     run_timeout: float = 10.0,
 ) -> tuple[CompileResult, RunResult | None]:
     """Compile and run Java source code in an isolated temp directory.
-    
+
     Returns:
         (CompileResult, RunResult | None)
         - RunResult is None if compilation fails
@@ -60,12 +61,12 @@ def compile_and_run(
     class_name = extract_class_name(java_source)
     if not class_name:
         return CompileResult(success=False, stderr="No class found in source"), None
-    
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         java_file = tmp_path / f"{class_name}.java"
         java_file.write_text(java_source, encoding="utf-8")
-        
+
         # Compile
         try:
             result = subprocess.run(
@@ -81,9 +82,9 @@ def compile_and_run(
             return CompileResult(success=False, stderr="Compilation timed out"), None
         except FileNotFoundError:
             return CompileResult(success=False, stderr="javac not found"), None
-        
+
         compile_result = CompileResult(success=True, stderr="")
-        
+
         # Run
         try:
             result = subprocess.run(
@@ -114,7 +115,7 @@ def compile_and_run(
                 stderr="java not found",
                 timed_out=False,
             )
-        
+
         return compile_result, run_result
 
 
@@ -123,12 +124,12 @@ def compile_only(java_source: str, timeout: float = 30.0) -> CompileResult:
     class_name = extract_class_name(java_source)
     if not class_name:
         return CompileResult(success=False, stderr="No class found in source")
-    
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         java_file = tmp_path / f"{class_name}.java"
         java_file.write_text(java_source, encoding="utf-8")
-        
+
         try:
             result = subprocess.run(
                 ["javac", str(java_file)],

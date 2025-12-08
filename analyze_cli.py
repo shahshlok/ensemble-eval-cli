@@ -32,6 +32,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from llm_miscons_cli import MODEL_SHORT_NAMES
 from utils.matching.classifier import MatchResult
 from utils.matching.fuzzy import fuzzy_match_misconception
 from utils.matching.hybrid import (
@@ -40,8 +41,6 @@ from utils.matching.hybrid import (
     precompute_gt_embeddings_for_hybrid,
 )
 from utils.matching.semantic import semantic_match_misconception
-
-from llm_miscons_cli import MODEL_SHORT_NAMES
 
 # ---------------------------------------------------------------------------
 # Model Color Palette (supports up to 8 models dynamically)
@@ -95,20 +94,22 @@ class MatchResult_:
 def adapt_detection_fields(detection: dict[str, Any]) -> dict[str, Any]:
     """
     Adapt new NotionalMisconception fields to legacy matcher field names.
-    
+
     New model fields -> Legacy matcher fields:
     - inferred_category_name -> name
-    - conceptual_gap -> description  
+    - conceptual_gap -> description
     - student_thought_process -> student_belief
     - error_manifestation -> (not used, but preserved)
-    
+
     This allows the existing fuzzy/semantic/hybrid matchers to work
     without modification.
     """
     return {
         "name": detection.get("inferred_category_name", detection.get("name", "")),
         "description": detection.get("conceptual_gap", detection.get("description", "")),
-        "student_belief": detection.get("student_thought_process", detection.get("student_belief", "")),
+        "student_belief": detection.get(
+            "student_thought_process", detection.get("student_belief", "")
+        ),
         "topic": detection.get("topic", ""),  # Not in new model, but needed for hybrid
         "confidence": detection.get("confidence"),
         "evidence": detection.get("evidence", []),
@@ -125,7 +126,7 @@ def dispatch_matcher(
     """
     Dispatch to the appropriate matcher based on match_mode.
     Returns a unified MatchResult_ regardless of which matcher is used.
-    
+
     Automatically adapts NotionalMisconception fields to legacy format.
     """
     # Adapt new field names to legacy format for matchers
@@ -323,7 +324,9 @@ def build_dataframes(
                                 "result": result.value,
                                 "is_clean": is_clean,
                                 "confidence": mis.get("confidence"),
-                                "detected_name": mis.get("inferred_category_name", mis.get("name", "")),
+                                "detected_name": mis.get(
+                                    "inferred_category_name", mis.get("name", "")
+                                ),
                                 "detected_topic": mis.get("topic", ""),
                                 "expected_topic": expected_topic,
                             }
@@ -733,16 +736,14 @@ def plot_topic_recall_bars(opportunities: pd.DataFrame, path: Path) -> Path:
 
 
 def plot_per_misconception_recall(
-    opportunities: pd.DataFrame, 
-    groundtruth: list[dict[str, Any]],
-    path: Path
+    opportunities: pd.DataFrame, groundtruth: list[dict[str, Any]], path: Path
 ) -> Path:
     """Horizontal bar chart showing recall by individual misconception ID."""
     if opportunities.empty:
         return path
-    
+
     gt_map = {m["id"]: m for m in groundtruth}
-    
+
     # Group by expected_id and calculate recall
     mis_stats = (
         opportunities.groupby("expected_id")
@@ -750,17 +751,17 @@ def plot_per_misconception_recall(
         .reset_index()
         .sort_values("recall")
     )
-    
+
     # Add misconception names
     mis_stats["name"] = mis_stats["expected_id"].apply(
         lambda x: gt_map.get(x, {}).get("name", x)[:25] if x else "Unknown"
     )
     mis_stats["label"] = mis_stats["expected_id"] + "\n" + mis_stats["name"]
-    
+
     plt.figure(figsize=(12, max(6, 0.5 * len(mis_stats))))
     colors = plt.cm.RdYlGn(mis_stats["recall"])  # Red=low, Green=high
     bars = plt.barh(mis_stats["label"], mis_stats["recall"], color=colors)
-    
+
     # Add count and recall labels
     for bar, (_, row) in zip(bars, mis_stats.iterrows()):
         plt.text(
@@ -771,7 +772,7 @@ def plot_per_misconception_recall(
             fontsize=9,
             color="gray",
         )
-    
+
     plt.xlabel("Recall")
     plt.ylabel("Misconception")
     plt.title("Detection Recall by Misconception ID (sorted by difficulty)")
@@ -904,7 +905,7 @@ def plot_matcher_pr_scatter(metrics: pd.DataFrame, path: Path) -> Path:
 
     # Create main axes and inset axes for fuzzy zoom
     fig, ax_main = plt.subplots(figsize=(12, 8))
-    
+
     # Main plot (semantic + hybrid focus)
     for match_mode in metrics["match_mode"].unique():
         subset = metrics[metrics["match_mode"] == match_mode]
@@ -1011,39 +1012,42 @@ def plot_mcnemar_bar_chart(agreement_data: list[dict], path: Path) -> Path:
 
     # Filter to unique model pairs (aggregate across strategies)
     from collections import defaultdict
+
     pair_pvals = defaultdict(list)
     for row in agreement_data:
         key = (row["model_a"], row["model_b"])
         pair_pvals[key].append(row["mcnemar_p"])
-    
+
     # Average p-value per pair
     pairs = []
     for (model_a, model_b), p_list in pair_pvals.items():
         avg_p = sum(p_list) / len(p_list)
-        pairs.append({
-            "label": f"{model_a[:8]}...\nvs\n{model_b[:8]}...",
-            "p_value": avg_p,
-            "significant": avg_p < 0.05,
-        })
-    
+        pairs.append(
+            {
+                "label": f"{model_a[:8]}...\nvs\n{model_b[:8]}...",
+                "p_value": avg_p,
+                "significant": avg_p < 0.05,
+            }
+        )
+
     # Sort by p-value (lowest first = most significant)
     pairs.sort(key=lambda x: x["p_value"])
-    
+
     # Take top 15 for readability
     pairs = pairs[:15]
-    
+
     if not pairs:
         return path
-    
+
     fig, ax = plt.subplots(figsize=(14, 7))
     x = np.arange(len(pairs))
     colors = ["#e74c3c" if p["significant"] else "#95a5a6" for p in pairs]
-    
+
     bars = ax.bar(x, [p["p_value"] for p in pairs], color=colors, alpha=0.8, edgecolor="black")
-    
+
     # Significance threshold line
     ax.axhline(y=0.05, color="red", linestyle="--", linewidth=2, label="α = 0.05")
-    
+
     ax.set_xlabel("Model Pair", fontsize=11)
     ax.set_ylabel("p-value (avg across strategies)", fontsize=11)
     ax.set_title("McNemar's Test: Model Pair Significance", fontsize=14, fontweight="bold")
@@ -1052,13 +1056,19 @@ def plot_mcnemar_bar_chart(agreement_data: list[dict], path: Path) -> Path:
     ax.legend(loc="upper right")
     ax.set_ylim(0, min(1.0, max(p["p_value"] for p in pairs) * 1.2))
     ax.grid(axis="y", alpha=0.3)
-    
+
     # Add count annotations
     sig_count = sum(1 for p in pairs if p["significant"])
-    ax.text(0.02, 0.98, f"Significant: {sig_count}/{len(pairs)}", 
-            transform=ax.transAxes, fontsize=10, va="top", 
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
-    
+    ax.text(
+        0.02,
+        0.98,
+        f"Significant: {sig_count}/{len(pairs)}",
+        transform=ax.transAxes,
+        fontsize=10,
+        va="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
+
     plt.tight_layout()
     plt.savefig(path, dpi=200, bbox_inches="tight")
     plt.close()
@@ -1072,18 +1082,18 @@ def compute_model_rankings(metrics: pd.DataFrame) -> pd.DataFrame:
     """
     if metrics.empty:
         return pd.DataFrame()
-    
+
     data = metrics.copy()
-    
+
     # Get model short names
     data["model_short"] = data["model"].apply(lambda m: m.split("/")[-1])
-    
+
     # Create config column combining match_mode + strategy
     if "match_mode" in data.columns:
         data["config"] = data["match_mode"] + " / " + data["strategy"]
     else:
         data["config"] = data["strategy"]
-    
+
     # Compute average F1 per model
     model_stats = []
     for model in data["model_short"].unique():
@@ -1091,19 +1101,21 @@ def compute_model_rankings(metrics: pd.DataFrame) -> pd.DataFrame:
         avg_f1 = model_data["f1"].mean()
         best_idx = model_data["f1"].idxmax()
         worst_idx = model_data["f1"].idxmin()
-        model_stats.append({
-            "model_short": model,
-            "avg_f1": avg_f1,
-            "best_config": model_data.loc[best_idx, "config"],
-            "best_f1": model_data.loc[best_idx, "f1"],
-            "worst_config": model_data.loc[worst_idx, "config"],
-            "worst_f1": model_data.loc[worst_idx, "f1"],
-        })
-    
+        model_stats.append(
+            {
+                "model_short": model,
+                "avg_f1": avg_f1,
+                "best_config": model_data.loc[best_idx, "config"],
+                "best_f1": model_data.loc[best_idx, "f1"],
+                "worst_config": model_data.loc[worst_idx, "config"],
+                "worst_f1": model_data.loc[worst_idx, "f1"],
+            }
+        )
+
     rankings = pd.DataFrame(model_stats)
     rankings = rankings.sort_values("avg_f1", ascending=False).reset_index(drop=True)
     rankings["rank"] = range(1, len(rankings) + 1)
-    
+
     return rankings
 
 
@@ -1111,7 +1123,7 @@ def render_model_leaderboard(rankings: pd.DataFrame) -> str:
     """Render model leaderboard as markdown table."""
     if rankings.empty:
         return ""
-    
+
     lines = [
         "## Model Leaderboard",
         "",
@@ -1120,12 +1132,12 @@ def render_model_leaderboard(rankings: pd.DataFrame) -> str:
         "| Rank | Model | Avg F1 | Best Config (F1) | Worst Config (F1) |",
         "|------|-------|--------|------------------|-------------------|",
     ]
-    
+
     for _, row in rankings.iterrows():
         lines.append(
             f"| {row['rank']} | {row['model_short']} | {row['avg_f1']:.3f} | {row['best_config']} ({row['best_f1']:.2f}) | {row['worst_config']} ({row['worst_f1']:.2f}) |"
         )
-    
+
     lines.append("")
     return "\n".join(lines)
 
@@ -1346,9 +1358,21 @@ def plot_confidence_calibration_distribution(detections: pd.DataFrame, path: Pat
 
     # Add mean lines
     if len(tp_conf) > 0:
-        ax1.axvline(tp_conf.mean(), color="#27ae60", linestyle="--", linewidth=2, label=f"TP mean: {tp_conf.mean():.2f}")
+        ax1.axvline(
+            tp_conf.mean(),
+            color="#27ae60",
+            linestyle="--",
+            linewidth=2,
+            label=f"TP mean: {tp_conf.mean():.2f}",
+        )
     if len(fp_conf) > 0:
-        ax1.axvline(fp_conf.mean(), color="#c0392b", linestyle="--", linewidth=2, label=f"FP mean: {fp_conf.mean():.2f}")
+        ax1.axvline(
+            fp_conf.mean(),
+            color="#c0392b",
+            linestyle="--",
+            linewidth=2,
+            label=f"FP mean: {fp_conf.mean():.2f}",
+        )
 
     # Right: KDE density plot
     ax2 = axes[1]
@@ -1545,9 +1569,7 @@ def compute_misconception_recall(
     )
 
     # Add name and category from groundtruth
-    stats["name"] = stats["expected_id"].apply(
-        lambda x: gt_lookup.get(x, {}).get("name", x)
-    )
+    stats["name"] = stats["expected_id"].apply(lambda x: gt_lookup.get(x, {}).get("name", x))
     stats["category"] = stats["expected_id"].apply(
         lambda x: gt_lookup.get(x, {}).get("category", "Unknown")
     )
@@ -1614,12 +1636,14 @@ def compute_potential_recall(opportunities: pd.DataFrame) -> dict[str, Any]:
     by_misconception = (
         opps.groupby("expected_id")
         .apply(
-            lambda g: pd.Series({
-                "potential_recall": g.groupby("file_key")["success"].max().mean(),
-                "average_recall": g["success"].mean(),
-                "n_files": g["file_key"].nunique(),
-                "n_opportunities": len(g),
-            }),
+            lambda g: pd.Series(
+                {
+                    "potential_recall": g.groupby("file_key")["success"].max().mean(),
+                    "average_recall": g["success"].mean(),
+                    "n_files": g["file_key"].nunique(),
+                    "n_opportunities": len(g),
+                }
+            ),
             include_groups=False,
         )
         .reset_index()
@@ -1750,7 +1774,9 @@ def render_potential_recall_section(ceiling_stats: dict[str, Any]) -> str:
     if ceiling_stats["consistency"] < 0.5:
         lines.append("")
         lines.append("> [!WARNING]")
-        lines.append("> Low Consistency: Individual runs are unreliable even when detection is possible.")
+        lines.append(
+            "> Low Consistency: Individual runs are unreliable even when detection is possible."
+        )
 
     return "\n".join(lines)
 
@@ -1773,16 +1799,22 @@ def render_cognitive_depth_section(depth_stats: dict[str, Any]) -> str:
     for _, row in by_depth.iterrows():
         lines.append(f"| {row['cognitive_depth']} | {row['recall']:.1%} | {int(row['n'])} |")
 
-    lines.extend([
-        "",
-        f"**Depth Gap (Surface - Notional):** {depth_stats['depth_gap']:.1%}",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            f"**Depth Gap (Surface - Notional):** {depth_stats['depth_gap']:.1%}",
+            "",
+        ]
+    )
 
     if depth_stats["is_significant"]:
         lines.append("> [!IMPORTANT]")
-        lines.append("> Significant Depth Gap: LLMs detect Surface errors far better than Notional Machine violations.")
-        lines.append("> This supports the hypothesis that LLMs act as 'Compiler++' rather than 'Pedagogical Tutors'.")
+        lines.append(
+            "> Significant Depth Gap: LLMs detect Surface errors far better than Notional Machine violations."
+        )
+        lines.append(
+            "> This supports the hypothesis that LLMs act as 'Compiler++' rather than 'Pedagogical Tutors'."
+        )
     else:
         lines.append("> [!NOTE]")
         lines.append("> No significant depth gap observed in this run.")
@@ -1936,7 +1968,6 @@ def generate_report(
     ts = datetime.now(timezone.utc).isoformat()
     is_ablation = "match_mode" in metrics.columns
 
-
     report = [
         "# LLM Misconception Detection: Analysis Report",
         f"_Generated: {ts}_",
@@ -1997,7 +2028,6 @@ def generate_report(
 
     # Ablation section (only when running all matchers)
     if is_ablation:
-
         report.extend(
             [
                 "## Matcher Ablation: Fuzzy vs Semantic vs Hybrid",
@@ -2184,29 +2214,33 @@ def generate_report(
 
             kappa = cohen_kappa(a_res, b_res)
             stat, p, table = mcnemar(a_res, b_res)
-            agreement_rows.append({
-                "strategy": strategy,
-                "model_a": model_a_short,
-                "model_b": model_b_short,
-                "kappa": kappa,
-                "mcnemar_stat": stat,
-                "mcnemar_p": p,
-                "both_correct": table["both_correct"],
-                "only_a": table["only_a"],
-                "only_b": table["only_b"],
-                "both_wrong": table["both_wrong"],
-            })
-    
+            agreement_rows.append(
+                {
+                    "strategy": strategy,
+                    "model_a": model_a_short,
+                    "model_b": model_b_short,
+                    "kappa": kappa,
+                    "mcnemar_stat": stat,
+                    "mcnemar_p": p,
+                    "both_correct": table["both_correct"],
+                    "only_a": table["only_a"],
+                    "only_b": table["only_b"],
+                    "both_wrong": table["both_wrong"],
+                }
+            )
+
     if agreement_rows:
-        report.extend([
-            "",
-            "## Agreement & Significance",
-            "",
-            "### Cohen's Kappa (Inter-Model Agreement)",
-            "",
-            "| Strategy | Model A | Model B | Cohen's κ | Interpretation |",
-            "|----------|---------|---------|-----------|----------------|",
-        ])
+        report.extend(
+            [
+                "",
+                "## Agreement & Significance",
+                "",
+                "### Cohen's Kappa (Inter-Model Agreement)",
+                "",
+                "| Strategy | Model A | Model B | Cohen's κ | Interpretation |",
+                "|----------|---------|---------|-----------|----------------|",
+            ]
+        )
         for row in agreement_rows:
             # Interpret kappa
             k = row["kappa"]
@@ -2223,14 +2257,16 @@ def generate_report(
             report.append(
                 f"| {row['strategy']} | {row['model_a']} | {row['model_b']} | {k:.3f} | {interp} |"
             )
-        
-        report.extend([
-            "",
-            "### McNemar's Test (Significance of Differences)",
-            "",
-            "| Strategy | Model A | Model B | χ² Stat | p-value | Significant? | Both✓ | A only | B only | Both✗ |",
-            "|----------|---------|---------|---------|---------|--------------|-------|--------|--------|-------|",
-        ])
+
+        report.extend(
+            [
+                "",
+                "### McNemar's Test (Significance of Differences)",
+                "",
+                "| Strategy | Model A | Model B | χ² Stat | p-value | Significant? | Both✓ | A only | B only | Both✗ |",
+                "|----------|---------|---------|---------|---------|--------------|-------|--------|--------|-------|",
+            ]
+        )
         for row in agreement_rows:
             sig = "Yes" if row["mcnemar_p"] < 0.05 else "No"
             report.append(
@@ -2239,19 +2275,23 @@ def generate_report(
 
         # McNemar bar chart
         if asset_paths.get("mcnemar_chart"):
-            report.extend([
-                "",
-                f"![McNemar Significance Chart]({asset_paths.get('mcnemar_chart')})",
-            ])
+            report.extend(
+                [
+                    "",
+                    f"![McNemar Significance Chart]({asset_paths.get('mcnemar_chart')})",
+                ]
+            )
 
     # Full Results Table at the end (for ablation mode)
     if is_ablation:
-        report.extend([
-            "",
-            "## Full Results Table",
-            "",
-            render_metrics_table(metrics, ci, include_match_mode=True),
-        ])
+        report.extend(
+            [
+                "",
+                "## Full Results Table",
+                "",
+                render_metrics_table(metrics, ci, include_match_mode=True),
+            ]
+        )
 
     return "\n".join(report)
 
@@ -2606,16 +2646,22 @@ def main(
         # New visualizations
         plot_topic_recall_by_model(opportunities_df, asset_paths["topic_recall_by_model"])
         plot_model_agreement_matrix(opportunities_df, asset_paths["model_agreement_matrix"])
-        plot_confidence_calibration_distribution(detections_df, asset_paths["confidence_calibration"])
+        plot_confidence_calibration_distribution(
+            detections_df, asset_paths["confidence_calibration"]
+        )
 
     # Compute RQ1: Diagnostic Ceiling metrics
     ceiling_stats = compute_potential_recall(opportunities_df)
-    console.print(f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]")
+    console.print(
+        f"[cyan]Diagnostic Ceiling: {ceiling_stats['potential_recall']:.1%} (Avg: {ceiling_stats['average_recall']:.1%})[/cyan]"
+    )
 
     # Compute RQ2: Cognitive Depth metrics
     depth_stats = compute_cognitive_depth_analysis(opportunities_df, groundtruth)
     if depth_stats["by_depth"] is not None and not depth_stats["by_depth"].empty:
-        console.print(f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]")
+        console.print(
+            f"[cyan]Depth Gap (Surface - Notional): {depth_stats['depth_gap']:.1%}[/cyan]"
+        )
 
     # Build asset paths for run-local report (relative to run directory)
     run_asset_paths = {k: Path("assets") / v.name for k, v in asset_paths.items()}
@@ -2702,47 +2748,51 @@ def validate_dataset(
     if not manifest.exists():
         console.print(f"[red]Manifest not found: {manifest}[/red]")
         raise typer.Exit(1)
-    
+
     manifest_data = load_manifest(manifest)
     gt_data = load_groundtruth(groundtruth) if groundtruth.exists() else []
     gt_map = {m["id"]: m for m in gt_data}
-    
+
     # Basic counts
     students = manifest_data.get("students", [])
     total_students = len(students)
     manifest_version = manifest_data.get("manifest_version", "1.0")
-    
-    console.print(f"\n[bold cyan]Dataset Summary[/bold cyan]")
+
+    console.print("\n[bold cyan]Dataset Summary[/bold cyan]")
     console.print(f"  Manifest Version: {manifest_version}")
     console.print(f"  Total Students: {total_students}")
     console.print(f"  Model: {manifest_data.get('model', 'unknown')}")
     console.print(f"  Seed: {manifest_data.get('seed', 'unknown')}")
-    
+
     # Count per question and per misconception
-    question_counts = {"Q1": {"SEEDED": 0, "CLEAN": 0}, "Q2": {"SEEDED": 0, "CLEAN": 0}, 
-                       "Q3": {"SEEDED": 0, "CLEAN": 0}, "Q4": {"SEEDED": 0, "CLEAN": 0}}
+    question_counts = {
+        "Q1": {"SEEDED": 0, "CLEAN": 0},
+        "Q2": {"SEEDED": 0, "CLEAN": 0},
+        "Q3": {"SEEDED": 0, "CLEAN": 0},
+        "Q4": {"SEEDED": 0, "CLEAN": 0},
+    }
     misconception_counts: dict[str, int] = {}
-    
+
     for student in students:
         files = student.get("files", {})
         for question, info in files.items():
             q_type = info.get("type", "CLEAN")
             if question in question_counts:
                 question_counts[question][q_type] = question_counts[question].get(q_type, 0) + 1
-            
+
             if q_type == "SEEDED":
                 mis_id = info.get("misconception_id")
                 if mis_id:
                     misconception_counts[mis_id] = misconception_counts.get(mis_id, 0) + 1
-    
+
     # Question distribution table
-    console.print(f"\n[bold]Question Distribution:[/bold]")
+    console.print("\n[bold]Question Distribution:[/bold]")
     q_table = Table(show_header=True, header_style="bold")
     q_table.add_column("Question")
     q_table.add_column("SEEDED", justify="right")
     q_table.add_column("CLEAN", justify="right")
     q_table.add_column("Total", justify="right")
-    
+
     total_seeded = 0
     total_clean = 0
     for q in ["Q1", "Q2", "Q3", "Q4"]:
@@ -2751,11 +2801,15 @@ def validate_dataset(
         total_seeded += seeded
         total_clean += clean
         q_table.add_row(q, str(seeded), str(clean), str(seeded + clean))
-    
-    q_table.add_row("[bold]Total[/bold]", f"[bold]{total_seeded}[/bold]", 
-                    f"[bold]{total_clean}[/bold]", f"[bold]{total_seeded + total_clean}[/bold]")
+
+    q_table.add_row(
+        "[bold]Total[/bold]",
+        f"[bold]{total_seeded}[/bold]",
+        f"[bold]{total_clean}[/bold]",
+        f"[bold]{total_seeded + total_clean}[/bold]",
+    )
     console.print(q_table)
-    
+
     # Misconception distribution table
     console.print(f"\n[bold]Misconception Distribution ({len(misconception_counts)} types):[/bold]")
     m_table = Table(show_header=True, header_style="bold")
@@ -2764,7 +2818,7 @@ def validate_dataset(
     m_table.add_column("Category")
     m_table.add_column("Count", justify="right")
     m_table.add_column("%", justify="right")
-    
+
     # Sort by count descending
     sorted_miscns = sorted(misconception_counts.items(), key=lambda x: x[1], reverse=True)
     for mis_id, count in sorted_miscns:
@@ -2773,12 +2827,16 @@ def validate_dataset(
         category = gt_entry.get("category", "Unknown")
         pct = (count / total_seeded * 100) if total_seeded > 0 else 0
         m_table.add_row(mis_id, name[:30], category[:25], str(count), f"{pct:.1f}%")
-    
+
     console.print(m_table)
-    
+
     # Summary stats
-    seeded_pct = (total_seeded / (total_seeded + total_clean) * 100) if (total_seeded + total_clean) > 0 else 0
-    console.print(f"\n[bold green]Summary:[/bold green]")
+    seeded_pct = (
+        (total_seeded / (total_seeded + total_clean) * 100)
+        if (total_seeded + total_clean) > 0
+        else 0
+    )
+    console.print("\n[bold green]Summary:[/bold green]")
     console.print(f"  Seeded questions: {total_seeded} ({seeded_pct:.1f}%)")
     console.print(f"  Clean questions: {total_clean}")
     console.print(f"  Unique misconception types: {len(misconception_counts)}")
@@ -2786,4 +2844,3 @@ def validate_dataset(
 
 if __name__ == "__main__":
     app()
-

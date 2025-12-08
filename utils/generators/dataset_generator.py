@@ -19,7 +19,7 @@ import random
 import re
 import subprocess
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 from faker import Faker
 from openai import AsyncOpenAI
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 load_dotenv()
 
@@ -80,9 +80,11 @@ def get_persona_matrix() -> list[tuple[str, str]]:
 # Data Classes
 # ============================================================================
 
+
 @dataclass
 class TestCase:
     """A single test case with input and expected output."""
+
     name: str
     input: str
     expected_output: str
@@ -95,6 +97,7 @@ class TestCase:
 @dataclass
 class PipelineStats:
     """Track pipeline execution statistics."""
+
     correct_compile_failures: int = 0
     correct_test_failures: int = 0
     seeded_compile_failures: int = 0
@@ -120,28 +123,29 @@ class PipelineStats:
 @dataclass
 class StudentSample:
     """A single student sample in the dataset."""
+
     student_id: str
     folder_name: str
     persona_style: str
     persona_cognitive: str
-    seeded_question: str | None      # Which question has the bug (Q1-Q4) or None
+    seeded_question: str | None  # Which question has the bug (Q1-Q4) or None
     misconception_id: str | None
     misconception_name: str | None
-    correct_codes: dict[str, str]    # {"Q1": "...", "Q2": "...", ...}
-    seeded_code: str | None          # Only the seeded version of seeded_question
-
+    correct_codes: dict[str, str]  # {"Q1": "...", "Q2": "...", ...}
+    seeded_code: str | None  # Only the seeded version of seeded_question
 
 
 # ============================================================================
 # Java Execution Helpers
 # ============================================================================
 
+
 def extract_class_name(java_source: str) -> str | None:
     """Extract the main class name from Java source code."""
-    match = re.search(r'\bpublic\s+class\s+(\w+)', java_source)
+    match = re.search(r"\bpublic\s+class\s+(\w+)", java_source)
     if match:
         return match.group(1)
-    match = re.search(r'\bclass\s+(\w+)', java_source)
+    match = re.search(r"\bclass\s+(\w+)", java_source)
     return match.group(1) if match else None
 
 
@@ -269,7 +273,7 @@ TEST_CASES = {
             TestCase("height_4_last_row", "4", "****"),
             # Height 1 should have single star
             TestCase("height_1", "1", "*"),
-            # Height 3 should have 3 stars in last row  
+            # Height 3 should have 3 stars in last row
             TestCase("height_3_last_row", "3", "***"),
         ],
     },
@@ -333,42 +337,44 @@ def load_test_cases(assignment: str, question: str) -> list[TestCase]:
 
 def run_tests(java_source: str, test_cases: list[TestCase]) -> tuple[int, int, list[str]]:
     """Run test cases against Java code.
-    
+
     Returns: (passed_count, total_count, failure_messages)
     """
     passed = 0
     failures = []
-    
+
     for tc in test_cases:
         success, stdout, stderr = run_java(java_source, tc.input)
         if not success:
             failures.append(f"{tc.name}: Execution failed - {stderr}")
             continue
-        
+
         # Check if expected output is in stdout
         output_contains_expected = (
-            tc.expected_output in stdout or 
-            tc.expected_output.rstrip('0').rstrip('.') in stdout
+            tc.expected_output in stdout or tc.expected_output.rstrip("0").rstrip(".") in stdout
         )
-        
+
         # Check forbidden output if specified
         if tc.forbidden_output and tc.forbidden_output in stdout:
             failures.append(
                 f"{tc.name}: Found forbidden '{tc.forbidden_output}' in output: '{stdout.strip()}'"
             )
             continue
-        
+
         if output_contains_expected:
             passed += 1
         else:
-            failures.append(f"{tc.name}: Expected '{tc.expected_output}' in output, got '{stdout.strip()}'")
-    
+            failures.append(
+                f"{tc.name}: Expected '{tc.expected_output}' in output, got '{stdout.strip()}'"
+            )
+
     return passed, len(test_cases), failures
 
 
 # ============================================================================
 # LLM Generation
 # ============================================================================
+
 
 def strip_code_fences(text: str) -> str:
     """Remove markdown code fences if present."""
@@ -387,8 +393,10 @@ async def generate_correct_code(
     question: str,
 ) -> str:
     """Generate correct, working code for a question using the given persona."""
-    system = f"{persona_prompt} Respond with Java source code only, no explanations or markdown fences."
-    
+    system = (
+        f"{persona_prompt} Respond with Java source code only, no explanations or markdown fences."
+    )
+
     user = (
         f"Question {question}: {question_brief}\n\n"
         f"Full assignment text:\n{question_text}\n\n"
@@ -396,7 +404,7 @@ async def generate_correct_code(
         "The code must compile and produce the correct output. "
         "Keep the style consistent with your persona. Output only the Java code."
     )
-    
+
     response = await client.responses.create(
         model=model,
         input=[
@@ -404,14 +412,14 @@ async def generate_correct_code(
             {"role": "user", "content": user},
         ],
     )
-    
+
     # Extract text from response
     text = ""
     for output in getattr(response, "output", []):
         for content in getattr(output, "content", []):
             if hasattr(content, "text"):
                 text += content.text
-    
+
     return strip_code_fences(text)
 
 
@@ -433,7 +441,7 @@ async def generate_seeded_code(
         f"{persona_prompt} You are a student with a specific misunderstanding of the Notional Machine."
         "Respond with Java source code only, no explanations or markdown fences."
     )
-    
+
     user = (
         f"Here is a correct solution to the problem:\n"
         f"```java\n{correct_code}\n```\n\n"
@@ -452,7 +460,7 @@ async def generate_seeded_code(
         "- Do NOT add comments explaining the error.\n"
         "Output only the rewritten Java code."
     )
-    
+
     response = await client.responses.create(
         model=model,
         input=[
@@ -460,19 +468,20 @@ async def generate_seeded_code(
             {"role": "user", "content": user},
         ],
     )
-    
+
     text = ""
     for output in getattr(response, "output", []):
         for content in getattr(output, "content", []):
             if hasattr(content, "text"):
                 text += content.text
-    
+
     return strip_code_fences(text)
 
 
 # ============================================================================
 # Pipeline Orchestration
 # ============================================================================
+
 
 async def generate_sample(
     client: AsyncOpenAI,
@@ -486,103 +495,120 @@ async def generate_sample(
     stats: PipelineStats,
 ) -> StudentSample | None:
     """Generate a complete assignment (all 4 questions) with optional misconception seeding.
-    
+
     Args:
         seeded_question: Which question (Q1-Q4) to inject the misconception into, or None for all clean
         misconception: The misconception to inject (should be applicable to seeded_question)
         all_test_cases: Dict mapping question ID to test cases
-    
+
     Returns:
         StudentSample with all 4 correct codes + optionally 1 seeded code, or None if generation failed
     """
     style_id, cog_id = persona
     persona_prompt = build_persona_prompt(style_id, cog_id)
-    
+
     correct_codes = {}
-    
+
     # Step 1-3: Generate and validate correct code for ALL 4 questions
     for question in ["Q1", "Q2", "Q3", "Q4"]:
         question_text = question_texts.get(question, "")
         question_brief = question_briefs.get(question, "")
         test_cases = all_test_cases.get(question, [])
-        
+
         correct_code = None
         for attempt in range(MAX_RETRIES):
             try:
                 code = await generate_correct_code(
                     client, model, question_text, question_brief, persona_prompt, question
                 )
-                
+
                 # Step 2: Compile check
                 compiles, stderr = compile_java(code)
                 if not compiles:
-                    console.print(f"  [yellow]{question} correct code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
+                    console.print(
+                        f"  [yellow]{question} correct code compile failed (attempt {attempt + 1}): {stderr[:100]}[/yellow]"
+                    )
                     stats.correct_compile_failures += 1
                     continue
-                
+
                 # Step 3: Test check (all must pass)
                 passed, total, failures = run_tests(code, test_cases)
                 if passed < total:
-                    console.print(f"  [yellow]{question} correct code tests failed (attempt {attempt+1}): {passed}/{total}[/yellow]")
+                    console.print(
+                        f"  [yellow]{question} correct code tests failed (attempt {attempt + 1}): {passed}/{total}[/yellow]"
+                    )
                     stats.correct_test_failures += 1
                     continue
-                
+
                 correct_code = code
                 break
             except Exception as e:
                 console.print(f"  [red]Error generating {question} correct code: {e}[/red]")
-        
+
         if not correct_code:
             # Failed to generate correct code for this question → discard entire student
             stats.discarded_samples += 1
             return None
-        
+
         correct_codes[question] = correct_code
-    
+
     # Step 4-6: Optionally generate seeded code for the designated question
     seeded_code = None
-    
+
     if seeded_question and misconception:
         correct_code_for_seeding = correct_codes[seeded_question]
         test_cases_for_seeding = all_test_cases.get(seeded_question, [])
-        
+
         for attempt in range(MAX_RETRIES):
             try:
                 code = await generate_seeded_code(
-                    client, model, correct_code_for_seeding, misconception, persona_prompt, seeded_question
+                    client,
+                    model,
+                    correct_code_for_seeding,
+                    misconception,
+                    persona_prompt,
+                    seeded_question,
                 )
-                
+
                 # Step 5: Compile check
                 compiles, stderr = compile_java(code)
                 if not compiles:
-                    console.print(f"  [yellow]{seeded_question} seeded code compile failed (attempt {attempt+1}): {stderr[:100]}[/yellow]")
+                    console.print(
+                        f"  [yellow]{seeded_question} seeded code compile failed (attempt {attempt + 1}): {stderr[:100]}[/yellow]"
+                    )
                     stats.seeded_compile_failures += 1
                     continue
-                
+
                 # Check if code differs from correct
                 if code.strip() == correct_code_for_seeding.strip():
-                    console.print(f"  [yellow]{seeded_question} seeded code identical to correct (attempt {attempt+1})[/yellow]")
+                    console.print(
+                        f"  [yellow]{seeded_question} seeded code identical to correct (attempt {attempt + 1})[/yellow]"
+                    )
                     stats.seeded_no_diff_failures += 1
                     continue
-                
+
                 # Step 6: Test check (at least 1 must fail)
                 passed, total, failures = run_tests(code, test_cases_for_seeding)
                 if passed == total:
-                    console.print(f"  [yellow]{seeded_question} seeded code passed all tests (attempt {attempt+1})[/yellow]")
+                    console.print(
+                        f"  [yellow]{seeded_question} seeded code passed all tests (attempt {attempt + 1})[/yellow]"
+                    )
                     stats.seeded_test_pass_failures += 1
                     continue
-                
+
                 seeded_code = code
                 break
             except Exception as e:
                 console.print(f"  [red]Error generating {seeded_question} seeded code: {e}[/red]")
-        
+
         if not seeded_code:
             # Failed to inject misconception → fallback to clean submission
-            console.print(f"  [cyan]{seeded_question} seeding failed, falling back to clean submission[/cyan]")
+            console.print(
+                f"  [cyan]{seeded_question} seeding failed, falling back to clean submission[/cyan]"
+            )
             stats.seeded_fallback_to_clean += 1
             seeded_question = None  # Mark as clean
-    
+
     stats.successful_samples += 1
     return StudentSample(
         student_id="",
@@ -597,11 +623,10 @@ async def generate_sample(
     )
 
 
-
-
 # ============================================================================
 # Main Entry Points
 # ============================================================================
+
 
 async def run_pipeline(
     assignment: str,
@@ -614,17 +639,17 @@ async def run_pipeline(
     random.seed(seed)
     faker = Faker()
     faker.seed_instance(seed)
-    
+
     # Load assignment data
     data_dir = Path("data") / assignment
     groundtruth_path = data_dir / "groundtruth.json"
     tests_dir = data_dir / "tests"
-    
+
     if not groundtruth_path.exists():
         raise FileNotFoundError(f"Ground truth not found: {groundtruth_path}")
-    
+
     misconceptions = json.loads(groundtruth_path.read_text())
-    
+
     # Load question texts
     question_files = {
         "Q1": data_dir / "q1.md",
@@ -633,27 +658,27 @@ async def run_pipeline(
         "Q4": data_dir / "q4.md",
     }
     question_texts = {q: f.read_text() for q, f in question_files.items() if f.exists()}
-    
+
     question_briefs = QUESTION_BRIEFS.get(assignment, QUESTION_BRIEFS["a2"])
-    
+
     # Setup output directories
     correct_dir = output_root / "correct"
     correct_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Get persona matrix
     personas = get_persona_matrix()
-    
+
     # Initialize client
     client = AsyncOpenAI()
-    
+
     # Statistics
     stats = PipelineStats()
-    
+
     # Generate students
     console.print(f"\n[bold cyan]Generating {student_count} students...[/bold cyan]\n")
-    
+
     manifest_students = []
-    
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -662,26 +687,30 @@ async def run_pipeline(
         console=console,
     ) as progress:
         task = progress.add_task("Generating students", total=student_count)
-        
+
         for i in range(student_count):
             first = faker.first_name()
             last = faker.last_name()
             student_id = random.randint(100000, 999999)
             folder_name = f"{last}_{first}_{student_id}"
-            
+
             # Pick random persona
             style_id, cog_id = random.choice(personas)
-            
+
             # Pick ONE random question to seed
             seeded_question = random.choice(["Q1", "Q2", "Q3", "Q4"])
-            applicable_miscns = [m for m in misconceptions if seeded_question.upper() in [q.upper() for q in m.get("applicable_questions", [])]]
+            applicable_miscns = [
+                m
+                for m in misconceptions
+                if seeded_question.upper() in [q.upper() for q in m.get("applicable_questions", [])]
+            ]
             misconception = random.choice(applicable_miscns) if applicable_miscns else None
-            
-            progress.update(task, description=f"Student {i+1}: {folder_name}")
-            
+
+            progress.update(task, description=f"Student {i + 1}: {folder_name}")
+
             # Load test cases for ALL questions
             all_test_cases = {q: load_test_cases(assignment, q) for q in ["Q1", "Q2", "Q3", "Q4"]}
-            
+
             # Generate sample (all 4 questions)
             sample = await generate_sample(
                 client=client,
@@ -694,52 +723,57 @@ async def run_pipeline(
                 all_test_cases=all_test_cases,
                 stats=stats,
             )
-            
+
             if sample:
                 sample.student_id = str(student_id)
                 sample.folder_name = folder_name
-                
+
                 # Save all 4 correct codes
                 student_correct_dir = correct_dir / folder_name
                 student_correct_dir.mkdir(parents=True, exist_ok=True)
                 for question, code in sample.correct_codes.items():
                     (student_correct_dir / f"{question}.java").write_text(code)
-                
+
                 # Save student submission folder (3 clean + 1 seeded OR 4 clean)
                 student_submission_dir = output_root / folder_name
                 student_submission_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 for question in ["Q1", "Q2", "Q3", "Q4"]:
                     if question == sample.seeded_question and sample.seeded_code:
                         # Use seeded version
                         (student_submission_dir / f"{question}.java").write_text(sample.seeded_code)
                     else:
                         # Use correct version
-                        (student_submission_dir / f"{question}.java").write_text(sample.correct_codes[question])
-                
+                        (student_submission_dir / f"{question}.java").write_text(
+                            sample.correct_codes[question]
+                        )
+
                 # Add to manifest
                 files_dict = {}
                 for question in ["Q1", "Q2", "Q3", "Q4"]:
-                    is_seeded = (question == sample.seeded_question and sample.seeded_code is not None)
+                    is_seeded = (
+                        question == sample.seeded_question and sample.seeded_code is not None
+                    )
                     files_dict[question] = {
                         "type": "SEEDED" if is_seeded else "CLEAN",
                         "misconception_id": sample.misconception_id if is_seeded else None,
                         "misconception_name": sample.misconception_name if is_seeded else None,
                     }
-                
-                manifest_students.append({
-                    "folder_name": folder_name,
-                    "student_id": student_id,
-                    "first_name": first,
-                    "last_name": last,
-                    "persona_style": style_id,
-                    "persona_cognitive": cog_id,
-                    "files": files_dict
-                })
-            
+
+                manifest_students.append(
+                    {
+                        "folder_name": folder_name,
+                        "student_id": student_id,
+                        "first_name": first,
+                        "last_name": last,
+                        "persona_style": style_id,
+                        "persona_cognitive": cog_id,
+                        "files": files_dict,
+                    }
+                )
+
             progress.advance(task)
 
-    
     # Save manifest
     manifest = {
         "manifest_version": "2.0",
@@ -751,10 +785,10 @@ async def run_pipeline(
         "students": manifest_students,
     }
     (output_root / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    
+
     # Save stats
     (output_root / "pipeline_stats.json").write_text(json.dumps(stats.to_dict(), indent=2))
-    
+
     # Print summary
     console.print("\n[bold green]Pipeline Complete![/bold green]")
     console.print(f"  Successful samples: {stats.successful_samples}")
@@ -779,14 +813,14 @@ def generate(
     """Generate synthetic student submissions with seeded misconceptions."""
     if seed is None:
         seed = int(datetime.utcnow().timestamp())
-    
-    console.print(f"[bold]Synthetic Dataset Pipeline[/bold]")
+
+    console.print("[bold]Synthetic Dataset Pipeline[/bold]")
     console.print(f"  Assignment: {assignment}")
     console.print(f"  Students: {students}")
     console.print(f"  Model: {model}")
     console.print(f"  Seed: {seed}")
     console.print(f"  Output: {output}")
-    
+
     asyncio.run(run_pipeline(assignment, students, model, output, seed))
 
 

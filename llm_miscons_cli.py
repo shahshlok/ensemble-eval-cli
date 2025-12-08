@@ -72,10 +72,9 @@ def get_student_list() -> list[str]:
     """Get list of student folders."""
     if not SUBMISSION_DIR.exists():
         return []
-    return sorted([
-        d.name for d in SUBMISSION_DIR.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    ])
+    return sorted(
+        [d.name for d in SUBMISSION_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    )
 
 
 def load_manifest() -> dict[str, Any]:
@@ -156,9 +155,7 @@ async def process_student_question(
         # Build model configs: (key, model_id, use_reasoning)
         model_configs = [(model, model, False) for model in MODELS]
         if include_reasoning:
-            model_configs.extend([
-                (f"{model}:reasoning", model, True) for model in MODELS
-            ])
+            model_configs.extend([(f"{model}:reasoning", model, True) for model in MODELS])
 
         # Run all models in parallel
         tasks = [
@@ -234,7 +231,7 @@ async def run_detection(
             stats["total_processed"] += 1
             if result["status"] == "success":
                 stats["successful"] += 1
-                
+
                 # Save individual result
                 output_file = strategy_dir / f"{result['student']}_{result['question']}.json"
                 output_file.write_text(json.dumps(result, indent=2))
@@ -242,7 +239,9 @@ async def run_detection(
                 # Update model stats
                 for model_key in result["models"]:
                     if model_key in stats["total_misconceptions"]:
-                        stats["total_misconceptions"][model_key] += result["models"][model_key]["count"]
+                        stats["total_misconceptions"][model_key] += result["models"][model_key][
+                            "count"
+                        ]
             elif result["status"] == "skipped":
                 stats["skipped"] += 1
             else:
@@ -252,7 +251,7 @@ async def run_detection(
     stats["strategy"] = strategy
     stats["timestamp"] = datetime.now(timezone.utc).isoformat()
     stats["students_processed"] = len(students)
-    
+
     stats_file = strategy_dir / "_stats.json"
     stats_file.write_text(json.dumps(stats, indent=2))
 
@@ -353,7 +352,9 @@ def detect(
     console.print(create_header())
     console.print()
     console.print(f"[cyan]Running {strategy} on {len(student_list)} students...[/cyan]")
-    console.print(f"[dim]Models: {len(MODELS)} base + {0 if no_reasoning else len(MODELS)} reasoning[/dim]")
+    console.print(
+        f"[dim]Models: {len(MODELS)} base + {0 if no_reasoning else len(MODELS)} reasoning[/dim]"
+    )
     console.print()
 
     stats = asyncio.run(run_detection(student_list, strategy, output, not no_reasoning))
@@ -409,13 +410,17 @@ def main(ctx: typer.Context):
 
         # Strategy selection
         console.print(create_strategy_menu())
-        choice = Prompt.ask("[bold]Select strategy[/bold]", choices=["1", "2", "3", "4"], default="2")
+        choice = Prompt.ask(
+            "[bold]Select strategy[/bold]", choices=["1", "2", "3", "4"], default="2"
+        )
         strategy = STRATEGIES[int(choice) - 1]
         console.print(f"[green]Selected: {strategy}[/green]")
         console.print()
 
         # Student count
-        n = Prompt.ask(f"[bold]Number of students[/bold] (max {len(students)})", default=str(len(students)))
+        n = Prompt.ask(
+            f"[bold]Number of students[/bold] (max {len(students)})", default=str(len(students))
+        )
         try:
             n = min(int(n), len(students))
         except ValueError:

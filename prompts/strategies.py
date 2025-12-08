@@ -19,14 +19,14 @@ from enum import Enum
 class PromptStrategy(str, Enum):
     """Available prompt strategies for misconception detection."""
 
-    BASELINE = "baseline"    # Simple error classification
-    TAXONOMY = "taxonomy"    # Taxonomy-guided detection
-    COT = "cot"              # Chain of thought tracing
-    SOCRATIC = "socratic"    # Mental model probing
+    BASELINE = "baseline"  # Simple error classification
+    TAXONOMY = "taxonomy"  # Taxonomy-guided detection
+    COT = "cot"  # Chain of thought tracing
+    SOCRATIC = "socratic"  # Mental model probing
 
 
 # JSON output schema for all strategies
-OUTPUT_SCHEMA = '''
+OUTPUT_SCHEMA = """
 Return your analysis as JSON matching this exact schema:
 
 {
@@ -45,7 +45,7 @@ Return your analysis as JSON matching this exact schema:
 }
 
 If no misconceptions are found, return: {"misconceptions": []}
-'''
+"""
 
 
 def build_baseline_prompt(problem_description: str, student_code: str) -> str:
@@ -54,7 +54,7 @@ def build_baseline_prompt(problem_description: str, student_code: str) -> str:
 
     Tests whether LLMs can detect misconceptions without explicit framework.
     """
-    return f'''You are a CS1 code reviewer.
+    return f"""You are a CS1 code reviewer.
 
 PROBLEM:
 {problem_description}
@@ -78,7 +78,7 @@ DO report:
 - Logic errors that suggest flawed mental models
 - Incorrect assumptions about program execution
 
-'''.strip()
+""".strip()
 
 
 def build_taxonomy_prompt(problem_description: str, student_code: str) -> str:
@@ -87,7 +87,7 @@ def build_taxonomy_prompt(problem_description: str, student_code: str) -> str:
 
     Provides the 5 notional machine categories to help classify misconceptions.
     """
-    return f'''You are a CS1 Teaching Assistant analyzing student code for notional machine misconceptions.
+    return f"""You are a CS1 Teaching Assistant analyzing student code for notional machine misconceptions.
 
 A "Notional Machine" is the mental model a student has of how the computer executes their code.
 Misconceptions occur when this mental model diverges from actual Java execution.
@@ -127,7 +127,7 @@ Analyze the code for notional machine misconceptions. For each misconception:
 - Name the category (use your own words, don't just copy the taxonomy names)
 - Explain what the student believes vs. reality
 - Point to specific evidence
-'''.strip()
+""".strip()
 
 
 def build_cot_prompt(problem_description: str, student_code: str) -> str:
@@ -137,7 +137,7 @@ def build_cot_prompt(problem_description: str, student_code: str) -> str:
     Forces the LLM to trace execution step-by-step to find where
     student mental model diverges from actual execution.
     """
-    return f'''You are a runtime environment simulator.
+    return f"""You are a runtime environment simulator.
 
 PROBLEM:
 {problem_description}
@@ -168,7 +168,7 @@ Step through this code systematically:
    - Explain the gap between belief and reality
 
 Show your work, then output the final JSON.
-'''.strip()
+""".strip()
 
 
 def build_socratic_prompt(problem_description: str, student_code: str) -> str:
@@ -177,7 +177,7 @@ def build_socratic_prompt(problem_description: str, student_code: str) -> str:
 
     Approaches the code as a tutor trying to understand student thinking.
     """
-    return f'''You are an expert Computer Science tutor using the Socratic Method.
+    return f"""You are an expert Computer Science tutor using the Socratic Method.
 
 Your goal is NOT to fix the code, but to understand the student's MENTAL MODEL.
 
@@ -205,7 +205,7 @@ For each flawed belief you identify:
 
 Be empathetic - these are common, reasonable mistakes for beginners.
 
-'''.strip()
+""".strip()
 
 
 # Strategy registry
