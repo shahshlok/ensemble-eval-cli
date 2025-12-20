@@ -57,25 +57,33 @@ STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
 # With 6 models per task, 5 concurrent tasks = 30 parallel requests max
 MAX_CONCURRENCY = 5
 
-SUBMISSION_DIR = Path("authentic_seeded/a3")
-DEFAULT_OUTPUT_DIR = Path("detections/a3_multi")
-QUESTIONS_DIR = Path("data/a3")
+# Configurable assignment (default a3, can be changed via CLI)
+CURRENT_ASSIGNMENT = "a3"
+
+def get_submission_dir() -> Path:
+    return Path(f"authentic_seeded/{CURRENT_ASSIGNMENT}")
+
+def get_output_dir() -> Path:
+    return Path(f"detections/{CURRENT_ASSIGNMENT}_multi")
+
+def get_questions_dir() -> Path:
+    return Path(f"data/{CURRENT_ASSIGNMENT}")
 
 # Provider mapping for models
 OPENAI_MODEL_SET = set(OPENAI_MODELS)
 ANTHROPIC_MODEL_SET = set(ANTHROPIC_MODELS)
 GEMINI_MODEL_SET = set(GEMINI_MODELS)
 
-
 def load_manifest() -> dict[str, Any]:
-    manifest_path = SUBMISSION_DIR / "manifest.json"
+    manifest_path = get_submission_dir() / "manifest.json"
     if not manifest_path.exists():
         return {}
     return json.loads(manifest_path.read_text())
 
 
 def get_student_list() -> list[str]:
-    if not SUBMISSION_DIR.exists():
+    submission_dir = get_submission_dir()
+    if not submission_dir.exists():
         return []
 
     manifest = load_manifest()
@@ -86,7 +94,7 @@ def get_student_list() -> list[str]:
             folder = entry.get("folder_name")
             if not folder:
                 continue
-            student_dir = SUBMISSION_DIR / folder
+            student_dir = submission_dir / folder
             if not student_dir.is_dir():
                 continue
             # Require all four question files to be present for inclusion.
@@ -94,15 +102,14 @@ def get_student_list() -> list[str]:
                 students.append(folder)
     else:
         students = sorted(
-            [d.name for d in SUBMISSION_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")]
+            [d.name for d in submission_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
         )
 
     return students
 
-
 def load_question_text(question: str) -> str:
     q_num = question.lower()
-    question_file = QUESTIONS_DIR / f"{q_num}.md"
+    question_file = get_questions_dir() / f"{q_num}.md"
     if not question_file.exists():
         raise FileNotFoundError(f"Question file not found: {question_file}")
     return question_file.read_text()
@@ -159,7 +166,7 @@ async def process_student_question(
     include_reasoning: bool = True,
 ) -> dict[str, Any]:
     async with semaphore:
-        student_file = SUBMISSION_DIR / student_id / f"{question}.java"
+        student_file = get_submission_dir() / student_id / f"{question}.java"
 
         if not student_file.exists():
             return {
@@ -347,19 +354,26 @@ def display_results(stats: dict[str, Any], strategy: str):
 
     console.print(model_table)
     console.print()
-    console.print(f"[dim]Results saved to {DEFAULT_OUTPUT_DIR}/{strategy}/[/dim]")
+    console.print(f"[dim]Results saved to {get_output_dir()}/{strategy}/[/dim]")
 
 
 @app.command()
 def detect(
     strategy: str = typer.Option("taxonomy", help="Strategy: baseline, taxonomy, cot, socratic"),
     students: int = typer.Option(0, help="Number of students (0 = all)"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, help="Output directory"),
+    output: Path = typer.Option(None, help="Output directory (default: detections/<assignment>_multi)"),
     no_reasoning: bool = typer.Option(False, help="Disable reasoning models"),
+    assignment: str = typer.Option("a3", help="Assignment: a1, a2, or a3"),
 ):
+    global CURRENT_ASSIGNMENT
+    CURRENT_ASSIGNMENT = assignment
+    
+    if output is None:
+        output = get_output_dir()
+    
     student_list = get_student_list()
     if not student_list:
-        console.print("[red]No students found in authentic_seeded/a3[/red]")
+        console.print(f"[red]No students found in authentic_seeded/{assignment}[/red]")
         raise typer.Exit(1)
 
     if students > 0:
@@ -383,11 +397,18 @@ def detect(
 @app.command()
 def all_strategies(
     students: int = typer.Option(0, help="Number of students (0 = all)"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, help="Output directory"),
+    output: Path = typer.Option(None, help="Output directory (default: detections/<assignment>_multi)"),
+    assignment: str = typer.Option("a3", help="Assignment: a1, a2, or a3"),
 ):
+    global CURRENT_ASSIGNMENT
+    CURRENT_ASSIGNMENT = assignment
+    
+    if output is None:
+        output = get_output_dir()
+    
     student_list = get_student_list()
     if not student_list:
-        console.print("[red]No students found.[/red]")
+        console.print(f"[red]No students found in authentic_seeded/{assignment}[/red]")
         raise typer.Exit(1)
 
     if students > 0:
@@ -446,7 +467,7 @@ def main(ctx: typer.Context):
             return
 
         console.print()
-        stats = asyncio.run(run_detection(selected, strategy, DEFAULT_OUTPUT_DIR))
+        stats = asyncio.run(run_detection(selected, strategy, get_output_dir()))
         display_results(stats, strategy)
         console.print("[bold green]Detection complete![/bold green]")
 
