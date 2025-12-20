@@ -47,7 +47,7 @@ REASONING_SHORT_NAMES = {
 ALL_MODEL_SHORT_NAMES = {**MODEL_SHORT_NAMES, **REASONING_SHORT_NAMES}
 
 STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
-MAX_CONCURRENCY = 30
+MAX_CONCURRENCY = 15
 
 SUBMISSION_DIR = Path("authentic_seeded/a3")
 DEFAULT_OUTPUT_DIR = Path("detections/a3_multi")
