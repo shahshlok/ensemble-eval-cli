@@ -61,4 +61,11 @@ To eliminate "validity circularity" (using LLMs to check LLMs), we will implemen
     *   **Action:** LLM Check (e.g., `gpt-4o-mini`).
     *   **Scope:** *Only* used for "Intent" or "Comment-based" misconceptions where runtime behavior might not change but the student's explanation is wrong.
 
+### 6. Supervised Compliance Filter (Null Misconception Classifier)
+- **Problem:** Models sometimes output “no misconception” entries inside the misconception list, polluting accuracy metrics.
+- **Plan:** Build a small labeled dataset of misconception entries (valid vs. “no‑misconception/format noise”).
+- **Method:** Embed each entry (name + student_thought_process + conceptual_gap + error_manifestation) and train a lightweight classifier (logistic regression).
+- **Validation:** Report cross‑validated accuracy and inter‑rater agreement; set a calibrated threshold.
+- **Use:** Apply the classifier as a post‑processing filter and report both raw vs. filtered metrics.
+
 ---

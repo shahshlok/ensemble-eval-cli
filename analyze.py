@@ -26,6 +26,9 @@ from rich.table import Table
 from utils.matching.fuzzy import fuzzy_match_misconception
 from utils.matching.hybrid import hybrid_match_misconception
 from utils.matching.semantic import (
+    build_detection_text,
+    cosine_similarity,
+    get_embedding,
     precompute_groundtruth_embeddings,
     semantic_match_misconception,
 )
@@ -37,6 +40,15 @@ DEFAULT_DETECTIONS_DIR = Path("detections/a1")
 DEFAULT_MANIFEST_PATH = Path("authentic_seeded/a1/manifest.json")
 DEFAULT_GROUNDTRUTH_PATH = Path("data/a1/groundtruth.json")
 RUNS_DIR = Path("runs/a1")
+
+NULL_TEMPLATES = [
+    "No misconception detected.",
+    "No misconceptions found; the student's understanding is correct.",
+    "Correct understanding; no flawed mental model is present.",
+    "The code is correct and reflects a proper understanding.",
+    "There is no conceptual error or misconception in this solution.",
+]
+NULL_TEMPLATE_THRESHOLD = 0.80
 
 app = typer.Typer(help="Analyze LLM misconception detections (v2)")
 console = Console()
@@ -104,6 +116,30 @@ def adapt_detection(mis: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def build_null_template_embeddings() -> list[list[float]]:
+    try:
+        return [get_embedding(t) for t in NULL_TEMPLATES]
+    except Exception as exc:
+        console.print(f"[yellow]Null-template embeddings unavailable: {exc}[/yellow]")
+        return []
+
+
+def is_null_template_misconception(
+    mis: dict[str, Any], null_embeddings: list[list[float]], threshold: float
+) -> bool:
+    if not null_embeddings:
+        return False
+    detection_text = build_detection_text(adapt_detection(mis))
+    if not detection_text.strip():
+        return False
+    try:
+        det_embedding = get_embedding(detection_text)
+    except Exception:
+        return False
+    best = max(cosine_similarity(det_embedding, tmpl) for tmpl in null_embeddings)
+    return best >= threshold
+
+
 # ---------------------------------------------------------------------------
 # Core Analysis
 # ---------------------------------------------------------------------------
@@ -115,7 +151,8 @@ def build_results_df(
     manifest: dict[str, Any],
     groundtruth: list[dict[str, Any]],
     match_mode: MatchMode,
-) -> pd.DataFrame:
+    null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build results dataframe with matching."""
 
     gt_map = {m["id"]: m for m in groundtruth}
@@ -123,6 +160,8 @@ def build_results_df(
     if match_mode in ("semantic", "hybrid", "all"):
         console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
         gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
+
+    null_embeddings = build_null_template_embeddings()
 
     strategies = discover_strategies(detections_dir)
     console.print(f"[green]Strategies:[/green] {', '.join(strategies)}")
@@ -134,6 +173,7 @@ def build_results_df(
         modes = [match_mode]
 
     all_rows = []
+    compliance_rows = []
 
     for current_mode in modes:
         console.print(f"[cyan]Running matcher: {current_mode}[/cyan]")
@@ -153,9 +193,33 @@ def build_results_df(
 
                 for model, payload in det.get("models", {}).items():
                     mis_list = payload.get("misconceptions", []) or []
+                    null_flags = [
+                        is_null_template_misconception(mis, null_embeddings, null_template_threshold)
+                        for mis in mis_list
+                    ]
+                    normalized_mis = [
+                        mis for mis, is_null in zip(mis_list, null_flags) if not is_null
+                    ]
+                    null_filtered = sum(1 for is_null in null_flags if is_null)
+
+                    if current_mode == modes[0]:
+                        compliance_rows.append(
+                            {
+                                "strategy": strategy,
+                                "model": model,
+                                "student": student,
+                                "question": question,
+                                "raw_misconceptions": len(mis_list),
+                                "null_filtered": null_filtered,
+                                "normalized_misconceptions": len(normalized_mis),
+                                "raw_empty": len(mis_list) == 0,
+                                "raw_nonempty": len(mis_list) > 0,
+                                "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
+                            }
+                        )
                     has_tp = False
 
-                    for mis in mis_list:
+                    for mis in normalized_mis:
                         adapted = adapt_detection(mis)
 
                         # Run appropriate matcher
@@ -234,7 +298,7 @@ def build_results_df(
 
         all_rows.extend(rows)
 
-    return pd.DataFrame(all_rows)
+    return pd.DataFrame(all_rows), pd.DataFrame(compliance_rows)
 
 
 def compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
@@ -254,6 +318,34 @@ def compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
         "recall": round(recall, 3),
         "f1": round(f1, 3),
     }
+
+
+def summarize_compliance(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame()
+    grouped = df.groupby(["strategy", "model"], as_index=False)
+    summary = grouped.agg(
+        total_files=("raw_empty", "size"),
+        raw_empty=("raw_empty", "sum"),
+        raw_nonempty=("raw_nonempty", "sum"),
+        null_only=("null_only", "sum"),
+        raw_misconceptions=("raw_misconceptions", "sum"),
+        null_filtered=("null_filtered", "sum"),
+        normalized_misconceptions=("normalized_misconceptions", "sum"),
+    )
+    return summary
+
+
+def df_to_markdown_table(df: pd.DataFrame) -> str:
+    if df.empty:
+        return "No compliance data available."
+    cols = list(df.columns)
+    header = "| " + " | ".join(cols) + " |"
+    sep = "| " + " | ".join(["---"] * len(cols)) + " |"
+    rows = []
+    for _, row in df.iterrows():
+        rows.append("| " + " | ".join(str(row[c]) for c in cols) + " |")
+    return "\n".join([header, sep] + rows)
 
 
 def metrics_by_group(df: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
@@ -594,10 +686,13 @@ def generate_report(
 # ---------------------------------------------------------------------------
 # Run Management
 # ---------------------------------------------------------------------------
-def create_run_dir(match_mode: str, manifest: dict[str, Any]) -> Path:
-    seed = manifest.get("seed", "unknown")
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
-    run_id = f"run_{timestamp}_seed{seed}_{match_mode}"
+def create_run_dir(match_mode: str, manifest: dict[str, Any], run_name: str | None = None) -> Path:
+    if run_name:
+        run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
+    else:
+        seed = manifest.get("seed", "unknown")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
+        run_id = f"run_{timestamp}_seed{seed}_{match_mode}"
     run_dir = RUNS_DIR / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir
@@ -632,6 +727,7 @@ def analyze(
     manifest_path: Path = typer.Option(DEFAULT_MANIFEST_PATH, help="Manifest path"),
     groundtruth_path: Path = typer.Option(DEFAULT_GROUNDTRUTH_PATH, help="Groundtruth path"),
     match_mode: str = typer.Option("hybrid", help="Match mode: fuzzy, semantic, hybrid, or all"),
+    run_name: str = typer.Option(None, help="Custom run name (e.g., 'run_10_revamp')"),
 ):
     """Run analysis on detections with report generation."""
     console.print("[bold cyan]═══ Analysis v2 ═══[/bold cyan]")
@@ -643,7 +739,9 @@ def analyze(
     console.print(f"Students: {manifest.get('student_count', 'N/A')}")
     console.print(f"Misconceptions: {len(groundtruth)}")
 
-    df = build_results_df(detections_dir, manifest, groundtruth, match_mode)  # type: ignore
+    df, compliance_df = build_results_df(  # type: ignore
+        detections_dir, manifest, groundtruth, match_mode
+    )
 
     if df.empty:
         console.print("[red]No results![/red]")
@@ -665,9 +763,16 @@ def analyze(
     console.print(table)
 
     # Save everything
-    run_dir = create_run_dir(match_mode, manifest)
+    run_dir = create_run_dir(match_mode, manifest, run_name)
     df.to_csv(run_dir / "results.csv", index=False)
     (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
+    if not compliance_df.empty:
+        compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+        compliance_summary = summarize_compliance(compliance_df)
+        compliance_summary.to_csv(run_dir / "compliance_summary.csv", index=False)
+        compliance_md = "# Compliance Summary\n\n"
+        compliance_md += df_to_markdown_table(compliance_summary) + "\n"
+        (run_dir / "compliance_summary.md").write_text(compliance_md)
 
     report_path = generate_report(df, manifest, groundtruth, run_dir, match_mode)
     console.print(f"[green]Report:[/green] {report_path}")
