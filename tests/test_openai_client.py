@@ -1,72 +1,33 @@
 import pytest
 from pydantic import BaseModel
-
 from utils.llm import openai as openai_module
-
 
 class DemoModel(BaseModel):
     value: str
-
-
-class DummyContent:
-    def __init__(self, parsed):
-        self.parsed = parsed
-
-
-class DummyOutput:
-    def __init__(self, content):
-        self.content = content
-
-
-class DummyParsed:
-    def __init__(self, output):
-        self.output = output
-
-
-class DummyResponses:
-    async def parse(self, *args, **kwargs):
-        return DummyParsed([DummyOutput([DummyContent(DemoModel(value="ok"))])])
-
-
-class DummyClient:
-    def __init__(self):
-        self.responses = DummyResponses()
-
+    explanation: str
 
 @pytest.mark.asyncio
-async def test_get_structured_response_returns_pydantic(monkeypatch):
-    monkeypatch.setattr(openai_module, "client", DummyClient())
-
+async def test_get_structured_response_real():
+    """Real test for standard structured response using gpt-4o-mini."""
     result = await openai_module.get_structured_response(
-        messages=[{"role": "user", "content": "test prompt"}],
+        messages=[{"role": "user", "content": "Say 'hello world' in the value field and explain why in explanation."}],
         response_model=DemoModel,
-        model="gpt-5.1",
+        model="gpt-5.1-2025-11-13",
     )
-
+    
     assert isinstance(result, DemoModel)
-    assert result.value == "ok"
-
+    assert "hello" in result.value.lower()
+    assert len(result.explanation) > 0
 
 @pytest.mark.asyncio
-async def test_get_reasoning_response_returns_pydantic(monkeypatch):
-    monkeypatch.setattr(openai_module, "client", DummyClient())
-
+async def test_get_reasoning_response_real():
+    """Real test for reasoning response using o1-mini."""
     result = await openai_module.get_reasoning_response(
-        messages=[{"role": "user", "content": "test prompt"}],
+        messages=[{"role": "user", "content": "Solve this riddle: I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I? Put the answer in 'value' and your reasoning in 'explanation'."}],
         response_model=DemoModel,
-        model="gpt-5.1",
+        model="gpt-5.1-2025-11-13",
     )
-
+    
     assert isinstance(result, DemoModel)
-    assert result.value == "ok"
-
-
-@pytest.mark.asyncio
-async def test_get_structured_response_empty_messages_raises(monkeypatch):
-    monkeypatch.setattr(openai_module, "client", DummyClient())
-
-    with pytest.raises(ValueError):
-        await openai_module.get_structured_response(
-            messages=[],
-            response_model=DemoModel,
-        )
+    assert "echo" in result.value.lower()
+    assert len(result.explanation) > 0

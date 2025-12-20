@@ -15,7 +15,7 @@ DEFAULT_MODEL = os.getenv("OPENAI_DEFAULT_MODEL", "gpt-5.1")
 
 client = instructor.from_openai(
     AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY")),
-    mode=instructor.Mode.JSON_SCHEMA,
+    mode=instructor.Mode.RESPONSES_TOOLS,
 )
 
 
@@ -33,19 +33,11 @@ async def get_structured_response(
 
     input_text = messages[-1].get("content", "")
 
-    parsed = await client.responses.parse(
+    return await client.responses.create(
         model=model,
         input=input_text,
-        text_format=response_model,
+        response_model=response_model,
     )
-
-    for output in parsed.output:
-        for item in output.content:
-            parsed_value = getattr(item, "parsed", None)
-            if parsed_value is not None:
-                return parsed_value
-
-    raise ValueError("No parsed content found in OpenAI response")
 
 
 @retry(
@@ -63,26 +55,18 @@ async def get_reasoning_response(
 
     input_text = messages[-1].get("content", "")
 
-    # Prefer explicit reasoning configuration when supported by the installed SDK.
+    # For reasoning models, we attempt to pass reasoning configuration.
     try:
-        parsed = await client.responses.parse(
+        return await client.responses.create(
             model=model,
             input=input_text,
-            text_format=response_model,
+            response_model=response_model,
             reasoning={"effort": "medium"},
         )
-    except TypeError:
-        # Older SDKs may not support the `reasoning` parameter; fall back gracefully.
-        parsed = await client.responses.parse(
+    except (TypeError, Exception):
+        # Fallback if reasoning parameter is not supported
+        return await client.responses.create(
             model=model,
             input=input_text,
-            text_format=response_model,
+            response_model=response_model,
         )
-
-    for output in parsed.output:
-        for item in output.content:
-            parsed_value = getattr(item, "parsed", None)
-            if parsed_value is not None:
-                return parsed_value
-
-    raise ValueError("No parsed content found in OpenAI reasoning response")
