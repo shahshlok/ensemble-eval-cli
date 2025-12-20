@@ -46,7 +46,6 @@ async def get_reasoning_response(
     messages: list[dict[str, str]],
     response_model: type[T],
     model: str = DEFAULT_MODEL,
-    reasoning_tokens: int = 1024,
 ) -> T:
     if not messages:
         raise ValueError("messages must contain at least one item")
