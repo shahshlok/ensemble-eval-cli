@@ -782,6 +782,303 @@ def analyze(
 
 
 @app.command()
+def analyze_multi(
+    run_name: str = typer.Option(..., help="Descriptive run name (e.g., 'full_baseline_30students')"),
+    match_mode: str = typer.Option("all", help="Match mode: fuzzy, semantic, hybrid, or all"),
+):
+    """Run multi-assignment analysis combining a1, a2, a3 into one unified report."""
+    console.print("[bold cyan]═══ Multi-Assignment Analysis ═══[/bold cyan]")
+    console.print(f"Run name: {run_name}")
+    console.print(f"Match mode: {match_mode}")
+    
+    ASSIGNMENTS = ["a1", "a2", "a3"]
+    all_dfs = []
+    all_compliance_dfs = []
+    combined_groundtruth: list[dict[str, Any]] = []
+    total_students = 0
+    seeds = []
+    
+    for assignment in ASSIGNMENTS:
+        console.print(f"\n[cyan]Processing {assignment}...[/cyan]")
+        
+        detections_dir = Path(f"detections/{assignment}_multi")
+        manifest_path = Path(f"authentic_seeded/{assignment}/manifest.json")
+        groundtruth_path = Path(f"data/{assignment}/groundtruth.json")
+        
+        if not detections_dir.exists():
+            console.print(f"[yellow]Warning: {detections_dir} not found, skipping[/yellow]")
+            continue
+            
+        manifest = load_manifest(manifest_path)
+        groundtruth = load_groundtruth(groundtruth_path)
+        
+        # Add to combined groundtruth (avoiding duplicates by ID)
+        existing_ids = {gt["id"] for gt in combined_groundtruth}
+        for gt in groundtruth:
+            if gt["id"] not in existing_ids:
+                combined_groundtruth.append(gt)
+        
+        total_students += manifest.get("student_count", 0)
+        if manifest.get("seed"):
+            seeds.append(str(manifest["seed"]))
+        
+        console.print(f"  Students: {manifest.get('student_count', 'N/A')}")
+        console.print(f"  Misconceptions: {len(groundtruth)}")
+        
+        df, compliance_df = build_results_df(detections_dir, manifest, groundtruth, match_mode)
+        
+        if not df.empty:
+            df["assignment"] = assignment
+            all_dfs.append(df)
+        
+        if not compliance_df.empty:
+            compliance_df["assignment"] = assignment
+            all_compliance_dfs.append(compliance_df)
+    
+    if not all_dfs:
+        console.print("[red]No results from any assignment![/red]")
+        return
+    
+    # Combine all DataFrames
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    combined_compliance_df = pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
+    
+    console.print(f"\n[bold]Combined dataset:[/bold]")
+    console.print(f"  Total students processed: {total_students}")
+    console.print(f"  Total detection rows: {len(combined_df)}")
+    console.print(f"  Unique misconceptions: {len(combined_groundtruth)}")
+    
+    # Compute overall metrics
+    overall = compute_metrics(combined_df)
+    console.print(
+        f"\n[bold]Overall:[/bold] P={overall['precision']:.3f} R={overall['recall']:.3f} F1={overall['f1']:.3f}"
+    )
+    
+    # Per-assignment metrics
+    console.print("\n[bold]By Assignment[/bold]")
+    by_assignment = metrics_by_group(combined_df, ["assignment"])
+    table = Table()
+    table.add_column("Assignment")
+    table.add_column("TP")
+    table.add_column("FP")
+    table.add_column("FN")
+    table.add_column("Precision")
+    table.add_column("Recall")
+    table.add_column("F1")
+    for _, row in by_assignment.iterrows():
+        table.add_row(
+            row["assignment"],
+            str(row["tp"]),
+            str(row["fp"]),
+            str(row["fn"]),
+            f"{row['precision']:.3f}",
+            f"{row['recall']:.3f}",
+            f"{row['f1']:.3f}",
+        )
+    console.print(table)
+    
+    # Create run directory
+    run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
+    run_dir = Path("runs/multi") / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    assets_dir = run_dir / "assets"
+    assets_dir.mkdir(exist_ok=True)
+    
+    # Save CSVs
+    combined_df.to_csv(run_dir / "results.csv", index=False)
+    (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
+    if not combined_compliance_df.empty:
+        combined_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
+    
+    # Generate charts
+    charts = generate_charts(combined_df, assets_dir)
+    
+    # Generate assignment comparison chart
+    if not by_assignment.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        x = np.arange(len(by_assignment))
+        width = 0.25
+        ax.bar(x - width, by_assignment["precision"], width, label="Precision", color="#4285F4")
+        ax.bar(x, by_assignment["recall"], width, label="Recall", color="#34A853")
+        ax.bar(x + width, by_assignment["f1"], width, label="F1", color="#EA4335")
+        ax.set_xlabel("Assignment")
+        ax.set_ylabel("Score")
+        ax.set_title("Cross-Assignment Comparison")
+        ax.set_xticks(x)
+        ax.set_xticklabels(by_assignment["assignment"].tolist())
+        ax.legend()
+        ax.set_ylim(0, 1)
+        plt.tight_layout()
+        fig.savefig(assets_dir / "assignment_comparison.png", dpi=150)
+        plt.close(fig)
+        charts.append("assignment_comparison.png")
+    
+    # Generate report
+    by_strategy = metrics_by_group(combined_df, ["strategy"])
+    by_model = metrics_by_group(combined_df, ["model"])
+    by_category = metrics_by_group(combined_df[combined_df["expected_category"].notna()], ["expected_category"])
+    by_misconception = metrics_by_group(combined_df[combined_df["expected_id"].notna()], ["expected_id"])
+    
+    # Build combined manifest for report
+    combined_manifest = {
+        "student_count": total_students,
+        "seed": ",".join(seeds) if seeds else "multiple",
+    }
+    
+    report_path = generate_multi_report(
+        combined_df, by_assignment, by_strategy, by_model, by_category, by_misconception,
+        combined_groundtruth, combined_manifest, run_dir, match_mode, charts
+    )
+    
+    console.print(f"[green]Report:[/green] {report_path}")
+    console.print("[bold green]✓ Multi-assignment analysis complete[/bold green]")
+
+
+def generate_multi_report(
+    df: pd.DataFrame,
+    by_assignment: pd.DataFrame,
+    by_strategy: pd.DataFrame,
+    by_model: pd.DataFrame,
+    by_category: pd.DataFrame,
+    by_misconception: pd.DataFrame,
+    groundtruth: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    run_dir: Path,
+    match_mode: str,
+    charts: list[str],
+) -> Path:
+    """Generate unified multi-assignment report."""
+    gt_map = {gt["id"]: gt for gt in groundtruth}
+    overall = compute_metrics(df)
+    
+    lines = [
+        "# Multi-Assignment LLM Misconception Detection Report",
+        f"_Generated: {datetime.now(timezone.utc).isoformat()}_",
+        "",
+        "## Dataset Summary",
+        f"- **Total Students:** {manifest.get('student_count', 'N/A')}",
+        f"- **Assignments:** a1, a2, a3",
+        f"- **Match Mode:** {match_mode}",
+        f"- **Seeds:** {manifest.get('seed', 'N/A')}",
+        "",
+        "## Overall Metrics",
+        "| Metric | Value |",
+        "|--------|-------|",
+        f"| True Positives | {overall['tp']} |",
+        f"| False Positives | {overall['fp']} |",
+        f"| False Negatives | {overall['fn']} |",
+        f"| **Precision** | **{overall['precision']:.3f}** |",
+        f"| **Recall** | **{overall['recall']:.3f}** |",
+        f"| **F1 Score** | **{overall['f1']:.3f}** |",
+        "",
+    ]
+    
+    # Cross-Assignment Comparison
+    lines.extend([
+        "## Cross-Assignment Comparison",
+        "| Assignment | TP | FP | FN | Precision | Recall | F1 |",
+        "|------------|----|----|----|-----------| -------|-----|",
+    ])
+    for _, row in by_assignment.iterrows():
+        lines.append(
+            f"| {row['assignment']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "assignment_comparison.png" in charts:
+        lines.append("![Assignment Comparison](assets/assignment_comparison.png)")
+        lines.append("")
+    
+    # Strategy section
+    lines.extend([
+        "## Performance by Strategy",
+        "| Strategy | TP | FP | FN | Precision | Recall | F1 |",
+        "|----------|----|----|----|-----------| -------|-----|",
+    ])
+    for _, row in by_strategy.iterrows():
+        lines.append(
+            f"| {row['strategy']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "strategy_f1.png" in charts:
+        lines.append("![Strategy F1](assets/strategy_f1.png)")
+        lines.append("")
+    
+    # Model section
+    lines.extend([
+        "## Performance by Model",
+        "| Model | TP | FP | FN | Precision | Recall | F1 |",
+        "|-------|----|----|----|-----------|--------|-----|",
+    ])
+    for _, row in by_model.iterrows():
+        model_short = row["model"].split("/")[-1]
+        lines.append(
+            f"| {model_short} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+        )
+    lines.append("")
+    if "model_comparison.png" in charts:
+        lines.append("![Model Comparison](assets/model_comparison.png)")
+        lines.append("")
+    
+    # Category section
+    if not by_category.empty:
+        lines.extend([
+            "## Notional Machine Category Detection (RQ2)",
+            "",
+            "> This table shows which mental model categories are easier/harder for LLMs to detect.",
+            "",
+            "| Category | Recall | N |",
+            "|----------|--------|---|",
+        ])
+        by_category = by_category.sort_values("recall")
+        for _, row in by_category.iterrows():
+            n = row["tp"] + row["fn"]
+            lines.append(f"| {row['expected_category']} | {row['recall']:.3f} | {n} |")
+        lines.append("")
+        if "category_recall.png" in charts:
+            lines.append("![Category Recall](assets/category_recall.png)")
+            lines.append("")
+    
+    # Heatmap
+    if "strategy_model_heatmap.png" in charts:
+        lines.extend([
+            "## Strategy × Model Heatmap",
+            "![Heatmap](assets/strategy_model_heatmap.png)",
+            "",
+        ])
+    
+    # Per-misconception
+    if not by_misconception.empty:
+        lines.extend([
+            "## Per-Misconception Detection Rates",
+            "| ID | Name | Category | Recall | N |",
+            "|----|------|----------|--------|---|",
+        ])
+        by_misconception = by_misconception.sort_values("recall")
+        for _, row in by_misconception.iterrows():
+            mid = row["expected_id"]
+            gt = gt_map.get(mid, {})
+            name = gt.get("name", mid)[:35]
+            cat = gt.get("category", "")[:25]
+            n = row["tp"] + row["fn"]
+            lines.append(f"| {mid} | {name} | {cat} | {row['recall']:.2f} | {n} |")
+        lines.append("")
+        if "misconception_recall.png" in charts:
+            lines.append("![Misconception Recall](assets/misconception_recall.png)")
+            lines.append("")
+    
+    # Hallucinations
+    if "hallucinations.png" in charts:
+        lines.extend([
+            "## False Positive Analysis",
+            "![Hallucinations](assets/hallucinations.png)",
+            "",
+        ])
+    
+    report_path = run_dir / "report.md"
+    report_path.write_text("\n".join(lines))
+    return report_path
+
+@app.command()
 def list_runs():
     """List all runs in index."""
     index_path = RUNS_DIR / "index.json"
