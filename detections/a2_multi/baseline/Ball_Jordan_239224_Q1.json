@@ -1,0 +1,167 @@
+{
+  "student": "Ball_Jordan_239224",
+  "question": "Q1",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Input validation changes the meaning of \u201creads 5 integers\u201d",
+          "student_thought_process": "The student believes they should keep prompting/looping until they have *successfully parsed* 5 integers, and that non-integer tokens should be ignored rather than treated as an error or re-prompted explicitly.",
+          "conceptual_gap": "The problem statement typically assumes the user will enter 5 integers (as in the sample run). Adding token-skipping input validation changes the program\u2019s behavior: it no longer corresponds to \u201cread 5 integers from the user\u201d in a straightforward way, because the program will consume additional tokens beyond the first 5 if the input contains non-integers. This isn\u2019t a Java execution misunderstanding, but it is a logic/specification mismatch stemming from an incorrect model of what the prompt requires.",
+          "error_manifestation": "Potentially unexpected behavior on non-integer input (it will silently skip bad tokens and continue), and it may read more than 5 tokens total to reach 5 integers. For valid integer input (the intended case), output is correct.",
+          "confidence": 0.55,
+          "evidence": [
+            {
+              "line_number": 15,
+              "code_snippet": "if (scanner.hasNextInt()) {"
+            },
+            {
+              "line_number": 26,
+              "code_snippet": "} else {\n                String badInput = scanner.next();\n            }"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Mandatory Variable Materialization",
+          "student_thought_process": "The student believes that every intermediate result of an expression or the return value of a method must be explicitly captured in a named variable before it can be used in a subsequent operation or discarded.",
+          "conceptual_gap": "The student fails to realize that Java's notional machine evaluates expressions as part of an evaluation stack, allowing return values to be used directly in conditions (e.g., in an 'if' statement), passed directly to other methods, or even ignored entirely without being stored in a named memory location (variable).",
+          "error_manifestation": "The student creates multiple single-use variables (remainder, newSum, newCount) and even captures unnecessary return values (badInput) that are never used, leading to more verbose code and unnecessary memory allocation.",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 16,
+              "code_snippet": "int remainder = currentValue % 2;"
+            },
+            {
+              "line_number": 18,
+              "code_snippet": "int newSum = sumOfEvens + currentValue;"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "int newCount = count + 1;"
+            },
+            {
+              "line_number": 24,
+              "code_snippet": "String badInput = scanner.next();"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Self-Referential Assignment Avoidance",
+          "student_thought_process": "The student believes that a variable cannot be updated by an expression that references the variable itself (e.g., 'x = x + 1'). They likely view the assignment operator as a declaration of state rather than a sequential update to a memory location.",
+          "conceptual_gap": "The student does not fully grasp the 'Evaluate-then-Assign' cycle, where the right-hand side of an assignment is fully evaluated using the current state of memory before the resulting value is stored in the variable on the left-hand side.",
+          "error_manifestation": "The student avoids patterns like 'count++' or 'count = count + 1', instead creating 'newSum' and 'newCount' variables to hold the result of the increment before updating the original variable.",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "int newSum = sumOfEvens + currentValue;"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "sumOfEvens = newSum;"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "int newCount = count + 1;"
+            },
+            {
+              "line_number": 22,
+              "code_snippet": "count = newCount;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Assuming input will eventually become valid (termination under invalid input)",
+          "student_thought_process": "The student believes that discarding non-integer tokens is enough to guarantee the loop will always reach 5 integers and terminate.",
+          "conceptual_gap": "In Java, a loop like `while (count < 5)` will only terminate if `count` is incremented. In this program, `count` increases only when `hasNextInt()` is true. If the user keeps providing non-integer tokens, the program will keep consuming them and never increment `count`, so the program may never finish. For the stated problem (user enters 5 integers), the code works correctly; this is only a robustness/termination issue under bad input.",
+          "error_manifestation": "Potential non-termination (infinite loop) if the input never contains enough integers; otherwise correct output for valid inputs.",
+          "confidence": 0.2,
+          "evidence": [
+            {
+              "line_number": 13,
+              "code_snippet": "while (count < 5) {"
+            },
+            {
+              "line_number": 14,
+              "code_snippet": "if (scanner.hasNextInt()) {"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "int newCount = count + 1;\ncount = newCount;"
+            },
+            {
+              "line_number": 23,
+              "code_snippet": "} else {\n    String badInput = scanner.next();\n}"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [],
+      "count": 0
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Self-Assignment Avoidance",
+          "student_thought_process": "The student believes that a variable cannot be updated by referencing its own current value within a single assignment statement (e.g., x = x + 1). They assume the computer requires a temporary storage variable to hold the result of a calculation before the original variable can be modified.",
+          "conceptual_gap": "In the Java execution model, the right-hand side of an assignment operator is fully evaluated before the result is stored in the memory location specified on the left-hand side. This makes 'self-assignment' patterns like 'count = count + 1' or 'count++' both valid and standard.",
+          "error_manifestation": "The code produces the correct output, but it contains unnecessary intermediate variables and increased verbosity, which can lead to larger memory footprints or scope-related errors in more complex programs.",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 18,
+              "code_snippet": "int newSum = sumOfEvens + currentValue;"
+            },
+            {
+              "line_number": 19,
+              "code_snippet": "sumOfEvens = newSum;"
+            },
+            {
+              "line_number": 21,
+              "code_snippet": "int newCount = count + 1;"
+            },
+            {
+              "line_number": 22,
+              "code_snippet": "count = newCount;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Mandatory Result Capture",
+          "student_thought_process": "The student believes that every method call that returns a value (like scanner.next()) must have that value assigned to a named variable, even if the value is not needed for the program's logic.",
+          "conceptual_gap": "In Java, methods can be called purely for their side effects (such as advancing the scanner's internal cursor over an invalid token). The return value of a method does not have to be used or assigned to a variable.",
+          "error_manifestation": "The code produces correct output but contains an unused variable 'badInput', which triggers compiler warnings and increases code clutter.",
+          "confidence": 0.7,
+          "evidence": [
+            {
+              "line_number": 24,
+              "code_snippet": "String badInput = scanner.next();"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-21T01:38:08.635611+00:00"
+}

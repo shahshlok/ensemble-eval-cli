@@ -1,0 +1,254 @@
+{
+  "student": "Davis_Bianca_872730",
+  "question": "Q2",
+  "strategy": "baseline",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Sorting a parallel array without keeping elements paired (aliasing and lost association)",
+          "student_thought_process": "The student believes that sorting the scores array (possibly through a temporary variable) will still allow them to use the last index of the original names array to get the student with the highest score.",
+          "conceptual_gap": "In Java, parallel arrays must be reordered together to preserve the mapping between name[i] and score[i]. Also, `int[] t = z;` does not create a copy; it makes `t` and `z` refer to the same array object. Sorting `t` sorts `z` in-place, but the `names` array `y` remains unsorted, so the correspondence between names and scores is broken. Selecting `y[n-1]` after sorting scores does not yield the name of the top-scoring student.",
+          "error_manifestation": "Wrong output: prints a name that is not the top student (unless the input already has the top student in the last position).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int[] t = z;"
+            },
+            {
+              "line_number": 30,
+              "code_snippet": "Arrays.sort(t);"
+            },
+            {
+              "line_number": 35,
+              "code_snippet": "rName = y[n - 1];"
+            },
+            {
+              "line_number": 36,
+              "code_snippet": "rScore = z[n - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Assuming sorting alone is required to find the maximum without validating the paired result",
+          "student_thought_process": "The student believes that after sorting scores, taking the last score and the last name will identify the top student.",
+          "conceptual_gap": "Even if the scores are sorted, you must either (a) swap names whenever you swap scores during sorting, or (b) sort indices/objects so each name stays attached to its score. Otherwise, picking the last name is unrelated to the last score.",
+          "error_manifestation": "Wrong output for typical inputs; for the sample input it would print \"Charlie (92)\" instead of \"Bob (92)\".",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 35,
+              "code_snippet": "rName = y[n - 1];"
+            },
+            {
+              "line_number": 36,
+              "code_snippet": "rScore = z[n - 1];"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Parallel Array Desynchronization After Sorting",
+          "student_thought_process": "The student believes that when they sort one of the parallel arrays (the scores array), the indices will somehow remain synchronized with the names array, or that sorting one array automatically sorts the other. They think that after sorting the scores, accessing z[n-1] will give the highest score and y[n-1] will give the corresponding name.",
+          "conceptual_gap": "The student does not understand that parallel arrays are independent data structures. When you sort one array, its indices get rearranged independently of the other array. The indices that matched before the sort are no longer matched after the sort. To maintain the relationship between names and scores, you must either: (1) swap corresponding elements in both arrays simultaneously when sorting, or (2) use a custom comparator with a single array of objects, or (3) track the indices of sorted elements. The student's code sorts the scores but the names array remains unchanged, breaking the name-score correspondence.",
+          "error_manifestation": "Wrong output: the program will print the name of the last student in the input order paired with the highest score, rather than the correct student's name paired with their score. For the sample input (Alice 85, Bob 92, Charlie 78), it would print 'Charlie (92)' instead of 'Bob (92)'.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int[] t = z;\nArrays.sort(t);"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "rName = y[n - 1];\nrScore = z[n - 1];"
+            },
+            {
+              "line_number": 29,
+              "code_snippet": "int[] t = z;\nArrays.sort(t);\n// ... later ...\nrName = y[n - 1];  // n-1 index in unsorted names array\nrScore = z[n - 1]; // n-1 index in sorted scores array"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Assignment Creates Reference, Not Copy",
+          "student_thought_process": "The student believes that `int[] t = z;` creates a new independent copy of the array z, so that sorting `t` will not affect `z`. They think this assignment operation isolates the original array from the sorting operation.",
+          "conceptual_gap": "In Java, `int[] t = z;` creates a reference to the same array object, not a copy. Both variables `t` and `z` point to the same array in memory. Therefore, `Arrays.sort(t)` sorts the original array that `z` references. The student misunderstands how array assignment works\u2014it does not create a defensive copy, it creates an alias. If the intent was to preserve the original order (which doesn't make sense for this problem), they would need `Arrays.copyOf(z, z.length)` instead.",
+          "error_manifestation": "Logic error: the student's assumption about isolation is incorrect, but ironically, the code still sorts the scores array as required. However, this reveals a misunderstanding about reference semantics in Java.",
+          "confidence": 0.75,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int[] t = z;\nArrays.sort(t);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Parallel Array Synchronization Failure",
+          "student_thought_process": "The student believes that the logical connection between elements in two parallel arrays (where index 'i' in both represents the same entity) is maintained by the Java runtime even when one array is reordered independently.",
+          "conceptual_gap": "In Java, arrays are independent objects. Reordering elements in one array via 'Arrays.sort' does not apply the same permutation to another array, effectively breaking the mapping between the names and their corresponding scores.",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 32,
+              "code_snippet": "Arrays.sort(t);"
+            },
+            {
+              "line_number": 38,
+              "code_snippet": "rName = y[n - 1];"
+            },
+            {
+              "line_number": 39,
+              "code_snippet": "rScore = z[n - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Reference Aliasing Misconception",
+          "student_thought_process": "The student believes that 'int[] t = z' creates a new, independent copy of the array 'z' rather than a second reference to the same memory location.",
+          "conceptual_gap": "In Java, array variables are references. Assigning one array variable to another ('t = z') copies the memory address (reference), not the underlying data. Consequently, 'Arrays.sort(t)' modifies 'z' because they point to the same object.",
+          "error_manifestation": "logic error",
+          "confidence": 0.85,
+          "evidence": [
+            {
+              "line_number": 31,
+              "code_snippet": "int[] t = z;"
+            },
+            {
+              "line_number": 32,
+              "code_snippet": "Arrays.sort(t);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Parallel Arrays Must Be Kept in Sync During Sorting",
+          "student_thought_process": "The student believes they can sort the `scores` array alone and then still use the same index in the `names` array to get the matching student name (e.g., taking `names[n-1]` for the top student after sorting scores).",
+          "conceptual_gap": "In a parallel-array design, each `names[i]` is paired with `scores[i]`. If you reorder one array (sort `scores`) without performing the same swaps/reordering on `names`, the pairing is destroyed. After sorting, `scores[n-1]` is the maximum score, but `names[n-1]` is still just the last-entered name, not the name that earned that maximum score.",
+          "error_manifestation": "Wrong output (prints an incorrect top-student name for most inputs; only correct if the last-entered student also has the highest score).",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 28,
+              "code_snippet": "int[] t = z;"
+            },
+            {
+              "line_number": 29,
+              "code_snippet": "Arrays.sort(t);"
+            },
+            {
+              "line_number": 34,
+              "code_snippet": "rName = y[n - 1];"
+            },
+            {
+              "line_number": 35,
+              "code_snippet": "rScore = z[n - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Confusion About Sorting \u2018By\u2019 a Key vs Sorting Only the Key Array",
+          "student_thought_process": "The student believes that sorting the scores is equivalent to sorting the student records by score, without needing to move the associated names.",
+          "conceptual_gap": "Sorting \"based on scores\" means sorting the *records* (name+score pairs) by the score key. With parallel arrays, that requires swapping/moving elements in both arrays together whenever scores are swapped/moved, or using an index-based sort. Sorting just the key array does not sort the underlying records.",
+          "error_manifestation": "Wrong output / data corruption (names no longer correspond to the correct scores after sorting).",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 27,
+              "code_snippet": "if (n > 0) {\n    int[] t = z;\n    Arrays.sort(t);\n}"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "if (n > 0) {\n    rName = y[n - 1];\n    rScore = z[n - 1];\n}"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Parallel Array Desynchronization",
+          "student_thought_process": "The student believes that sorting one of the parallel arrays is sufficient to identify the top student, without recognizing that the correspondence between the names and scores arrays must be maintained when reordering.",
+          "conceptual_gap": "When using parallel arrays to represent related data (names paired with scores), any reordering operation must be applied consistently across all arrays to preserve the pairing. The student sorted only the scores array while leaving the names array unchanged, breaking the parallel structure. After sorting scores to [78, 85, 92], the names array remains [Alice, Bob, Charlie], so the highest score (92) no longer corresponds to the correct name (Bob).",
+          "error_manifestation": "Wrong output: the program prints 'Top student: Charlie (92)' instead of 'Top student: Bob (92)'. The highest score is found correctly, but the associated name is incorrect because the arrays became desynchronized.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 28,
+              "code_snippet": "int[] t = z;\n            Arrays.sort(t);"
+            },
+            {
+              "line_number": 33,
+              "code_snippet": "rName = y[n - 1];\n            rScore = z[n - 1];"
+            },
+            {
+              "line_number": 24,
+              "code_snippet": "System.out.print(\"Enter scores: \");\n        i = 0;\n        while (i < n) {\n            int t = 0;\n            if (x.hasNextInt()) t = x.nextInt();\n            z[i] = t;\n            i++;\n        }\n        if (n > 0) {\n            int[] t = z;\n            Arrays.sort(t);\n        }"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Parallel Array Desynchronization",
+          "student_thought_process": "The student believes that sorting one of two parallel arrays (the scores array) is sufficient to identify the top performer, assuming that the index-based association between names and scores will either be maintained automatically or that the last index of the name array will naturally correspond to the highest score after sorting.",
+          "conceptual_gap": "In Java, parallel arrays have no intrinsic link. Sorting one array using a built-in method like Arrays.sort() rearranges its elements without moving the corresponding elements in the other array. The programmer is responsible for manually swapping elements in both arrays during a sort to maintain the logical relationship between them.",
+          "error_manifestation": "wrong output",
+          "confidence": 1.0,
+          "evidence": [
+            {
+              "line_number": 30,
+              "code_snippet": "Arrays.sort(t);"
+            },
+            {
+              "line_number": 35,
+              "code_snippet": "rName = y[n - 1];"
+            },
+            {
+              "line_number": 36,
+              "code_snippet": "rScore = z[n - 1];"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Reference Alias vs. Array Copying",
+          "student_thought_process": "The student believes that by assigning 't = z', they are creating a separate copy of the scores to manipulate, perhaps to keep the original scores array 'z' intact.",
+          "conceptual_gap": "In Java, assigning one array variable to another ('int[] t = z') does not copy the array data; it creates a reference alias. Both 't' and 'z' point to the exact same memory location. Consequently, sorting 't' modifies 'z' directly, which the student then treats as the source for the final result.",
+          "error_manifestation": "logic error",
+          "confidence": 0.8,
+          "evidence": [
+            {
+              "line_number": 29,
+              "code_snippet": "int[] t = z;"
+            },
+            {
+              "line_number": 30,
+              "code_snippet": "Arrays.sort(t);"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-21T03:12:42.776705+00:00"
+}
