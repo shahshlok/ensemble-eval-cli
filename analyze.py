@@ -168,7 +168,7 @@ def build_results_df(
 
     # Determine which matchers to run
     if match_mode == "all":
-        modes = ["fuzzy", "semantic", "hybrid"]
+        modes = ["fuzzy", "semantic"]  # No hybrid - user requested only fuzzy + semantic
     else:
         modes = [match_mode]
 
@@ -178,12 +178,17 @@ def build_results_df(
     for current_mode in modes:
         console.print(f"[cyan]Running matcher: {current_mode}[/cyan]")
         rows = []
+        det_count = 0
 
         for strategy in strategies:
             strategy_dir = detections_dir / strategy
             detections = load_detections_for_strategy(strategy_dir)
+            console.print(f"  [dim]{strategy}: {len(detections)} files[/dim]")
 
             for det in detections:
+                det_count += 1
+                if det_count % 50 == 0:
+                    console.print(f"    [dim]Processed {det_count} detections...[/dim]")
                 student = det.get("student", "")
                 question = det.get("question", "")
                 expected_id, is_clean = get_expected(manifest, student, question)
@@ -894,7 +899,7 @@ def analyze_multi(
         combined_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
     
     # Generate charts
-    charts = generate_charts(combined_df, assets_dir)
+    charts = generate_charts(combined_df, assets_dir, combined_groundtruth)
     
     # Generate assignment comparison chart
     if not by_assignment.empty:
