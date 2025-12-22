@@ -59,6 +59,14 @@ NULL_TEMPLATES = [
 ]
 NULL_TEMPLATE_THRESHOLD = 0.80
 
+# Noise floor: detections below this score are "pedantic" (e.g., "didn't close Scanner")
+# and should be filtered out rather than counted as hallucinations
+NOISE_FLOOR_THRESHOLD = 0.45
+
+# Semantic match threshold: lowered from 0.70 to capture more edge-case TPs
+# TP mean is ~0.774, FP mean is ~0.586, so 0.65 is a good separator
+SEMANTIC_THRESHOLD_DEFAULT = 0.65
+
 app = typer.Typer(help="Analyze LLM misconception detections (v2)")
 console = Console()
 
@@ -156,8 +164,9 @@ def build_results_df(
     detections_dir: Path,
     manifest: dict[str, Any],
     groundtruth: list[dict[str, Any]],
-    semantic_threshold: float = 0.70,
+    semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
     null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
+    noise_floor_threshold: float = NOISE_FLOOR_THRESHOLD,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Build results dataframe using semantic embedding matching.
@@ -204,23 +213,11 @@ def build_results_df(
                     for mis in mis_list
                 ]
                 normalized_mis = [mis for mis, is_null in zip(mis_list, null_flags) if not is_null]
-                null_filtered = sum(1 for is_null in null_flags if is_null)
+                null_filtered_count = sum(1 for is_null in null_flags if is_null)
+                noise_filtered_count = 0  # Will be updated as we process detections
 
-                compliance_rows.append(
-                    {
-                        "strategy": strategy,
-                        "model": model,
-                        "student": student,
-                        "question": question,
-                        "raw_misconceptions": len(mis_list),
-                        "null_filtered": null_filtered,
-                        "normalized_misconceptions": len(normalized_mis),
-                        "raw_empty": len(mis_list) == 0,
-                        "raw_nonempty": len(mis_list) > 0,
-                        "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
-                    }
-                )
                 has_tp = False
+                detection_rows_for_file: list[dict[str, Any]] = []
 
                 for mis in normalized_mis:
                     adapted = adapt_detection(mis)
@@ -235,6 +232,12 @@ def build_results_df(
                         precomputed_gt_embeddings=gt_embeddings,
                     )
 
+                    # NOISE FLOOR FILTER: Skip "pedantic" detections (e.g., "didn't close Scanner")
+                    # These are below threshold AND below noise floor - treat as noise, not hallucination
+                    if semantic_score < noise_floor_threshold:
+                        noise_filtered_count += 1
+                        continue  # Skip this detection entirely
+
                     # Classify result based on semantic match
                     if is_clean:
                         result_type = "FP_CLEAN"
@@ -244,9 +247,10 @@ def build_results_df(
                     elif matched_id:
                         result_type = "FP_WRONG"
                     else:
+                        # Above noise floor but below match threshold = hallucination
                         result_type = "FP_HALLUCINATION"
 
-                    rows.append(
+                    detection_rows_for_file.append(
                         {
                             "strategy": strategy,
                             "model": model,
@@ -266,6 +270,26 @@ def build_results_df(
                             "confidence": mis.get("confidence"),
                         }
                     )
+
+                # Add all detection rows for this file
+                rows.extend(detection_rows_for_file)
+
+                # Track compliance with noise filtering stats
+                compliance_rows.append(
+                    {
+                        "strategy": strategy,
+                        "model": model,
+                        "student": student,
+                        "question": question,
+                        "raw_misconceptions": len(mis_list),
+                        "null_filtered": null_filtered_count,
+                        "noise_filtered": noise_filtered_count,
+                        "evaluated_misconceptions": len(detection_rows_for_file),
+                        "raw_empty": len(mis_list) == 0,
+                        "raw_nonempty": len(mis_list) > 0,
+                        "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
+                    }
+                )
 
                 # Record FN if no true positive found
                 if not is_clean and expected_id and not has_tp:
@@ -322,7 +346,8 @@ def summarize_compliance(df: pd.DataFrame) -> pd.DataFrame:
         null_only=("null_only", "sum"),
         raw_misconceptions=("raw_misconceptions", "sum"),
         null_filtered=("null_filtered", "sum"),
-        normalized_misconceptions=("normalized_misconceptions", "sum"),
+        noise_filtered=("noise_filtered", "sum"),
+        evaluated_misconceptions=("evaluated_misconceptions", "sum"),
     )
     return summary
 
@@ -850,13 +875,19 @@ def analyze(
 def analyze_multi(
     run_name: str = typer.Option(..., help="Descriptive run name (e.g., 'analysisv2')"),
     semantic_threshold: float = typer.Option(
-        0.70, help="Semantic similarity threshold for matching"
+        SEMANTIC_THRESHOLD_DEFAULT,
+        help="Semantic similarity threshold for matching (default: 0.65)",
+    ),
+    noise_floor: float = typer.Option(
+        NOISE_FLOOR_THRESHOLD,
+        help="Noise floor threshold - detections below this are filtered (default: 0.45)",
     ),
 ):
     """Run multi-assignment analysis with semantic matching and statistical rigor."""
     console.print("[bold cyan]═══ Multi-Assignment Analysis v2 (Semantic) ═══[/bold cyan]")
     console.print(f"Run name: {run_name}")
     console.print(f"Semantic threshold: {semantic_threshold}")
+    console.print(f"Noise floor: {noise_floor}")
 
     ASSIGNMENTS = ["a1", "a2", "a3"]
     all_dfs = []
@@ -893,7 +924,11 @@ def analyze_multi(
         console.print(f"  Misconceptions: {len(groundtruth)}")
 
         df, compliance_df = build_results_df(
-            detections_dir, manifest, groundtruth, semantic_threshold=semantic_threshold
+            detections_dir,
+            manifest,
+            groundtruth,
+            semantic_threshold=semantic_threshold,
+            noise_floor_threshold=noise_floor,
         )
 
         if not df.empty:
@@ -1012,6 +1047,9 @@ def analyze_multi(
         run_dir,
         "semantic",  # Always semantic matching
         charts,
+        semantic_threshold=semantic_threshold,
+        noise_floor=noise_floor,
+        compliance_df=combined_compliance_df,
     )
 
     console.print(f"[green]Report:[/green] {report_path}")
@@ -1030,6 +1068,9 @@ def generate_multi_report(
     run_dir: Path,
     match_mode: str,
     charts: list[str],
+    semantic_threshold: float = SEMANTIC_THRESHOLD_DEFAULT,
+    noise_floor: float = NOISE_FLOOR_THRESHOLD,
+    compliance_df: pd.DataFrame | None = None,
 ) -> Path:
     """Generate unified multi-assignment report with statistical rigor."""
     gt_map = {gt["id"]: gt for gt in groundtruth}
@@ -1056,7 +1097,8 @@ def generate_multi_report(
         "## Dataset Summary",
         f"- **Total Students:** {manifest.get('student_count', 'N/A')}",
         f"- **Assignments:** a1 (Variables), a2 (Loops), a3 (Arrays)",
-        f"- **Matching Method:** Semantic Embedding (Cosine Similarity ≥ 0.70)",
+        f"- **Semantic Threshold:** Cosine Similarity ≥ {semantic_threshold:.2f}",
+        f"- **Noise Floor:** Detections with score < {noise_floor:.2f} are filtered as 'pedantic'",
         f"- **Seeds:** {manifest.get('seed', 'N/A')}",
         "",
         "## Overall Metrics (with 95% Confidence Intervals)",
@@ -1277,6 +1319,38 @@ def generate_multi_report(
             lines.append("![Misconception Recall](assets/misconception_recall.png)")
             lines.append("")
 
+    # Compliance / Filtering Statistics
+    if compliance_df is not None and not compliance_df.empty:
+        total_raw = compliance_df["raw_misconceptions"].sum()
+        total_null = compliance_df["null_filtered"].sum()
+        total_noise = compliance_df["noise_filtered"].sum()
+        total_evaluated = compliance_df["evaluated_misconceptions"].sum()
+
+        lines.extend(
+            [
+                "## Detection Filtering Pipeline",
+                "",
+                "> Shows how many detections were filtered at each stage before evaluation.",
+                "",
+                "| Stage | Count | % of Raw |",
+                "|-------|-------|----------|",
+                f"| Raw Detections | {total_raw} | 100% |",
+                f"| Null-Template Filtered | {total_null} | {100 * total_null / total_raw:.1f}% |"
+                if total_raw > 0
+                else "| Null-Template Filtered | 0 | 0% |",
+                f"| Noise Floor Filtered (< {noise_floor:.2f}) | {total_noise} | {100 * total_noise / total_raw:.1f}% |"
+                if total_raw > 0
+                else f"| Noise Floor Filtered (< {noise_floor:.2f}) | 0 | 0% |",
+                f"| **Evaluated Detections** | **{total_evaluated}** | **{100 * total_evaluated / total_raw:.1f}%** |"
+                if total_raw > 0
+                else "| **Evaluated Detections** | **0** | **0%** |",
+                "",
+                "> **Note:** 'Noise Floor Filtered' detections are pedantic observations (e.g., 'didn't close Scanner')",
+                "> that have low semantic similarity to any ground truth misconception and are not counted as hallucinations.",
+                "",
+            ]
+        )
+
     # Hallucinations
     if "hallucinations.png" in charts:
         lines.extend(
@@ -1284,6 +1358,7 @@ def generate_multi_report(
                 "## False Positive Analysis (Hallucinations)",
                 "",
                 "> These are misconceptions the LLM 'invented' that don't match any ground truth.",
+                "> Note: Only detections above the noise floor are counted here.",
                 "",
                 "![Hallucinations](assets/hallucinations.png)",
                 "",
@@ -1298,7 +1373,8 @@ def generate_multi_report(
             "## Methodology Notes",
             "",
             "- **Semantic Matching:** Uses OpenAI `text-embedding-3-large` to embed both LLM explanations and ground truth student thinking.",
-            "- **Threshold:** Cosine similarity ≥ 0.70 required for a True Positive.",
+            f"- **Match Threshold:** Cosine similarity ≥ {semantic_threshold:.2f} required for a True Positive.",
+            f"- **Noise Floor:** Detections with similarity < {noise_floor:.2f} are filtered as 'pedantic' noise, not counted as hallucinations.",
             "- **Bootstrap CI:** 1000 resamples with replacement for confidence intervals.",
             "- **McNemar's Test:** Paired comparison with continuity correction.",
             "",
