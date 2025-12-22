@@ -1,8 +1,13 @@
 """
 Clean analysis CLI for notional machine misconception detection.
 
-Supports fuzzy, semantic, and hybrid matching.
-Generates runs/a1/index.json, report.md, and charts.
+Uses semantic embedding matching to measure Cognitive Alignment.
+Generates runs/*/report.md with publication-grade statistics.
+
+ITiCSE/SIGCSE-grade analysis with:
+- Bootstrap confidence intervals
+- McNemar's test for strategy comparison
+- Semantic similarity analysis
 """
 
 from __future__ import annotations
@@ -10,7 +15,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import matplotlib
 
@@ -23,14 +28,18 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from utils.matching.fuzzy import fuzzy_match_misconception
-from utils.matching.hybrid import hybrid_match_misconception
 from utils.matching.semantic import (
     build_detection_text,
     cosine_similarity,
     get_embedding,
     precompute_groundtruth_embeddings,
     semantic_match_misconception,
+)
+from utils.statistics import (
+    analyze_semantic_scores,
+    compute_all_metrics_with_ci,
+    compute_cochran_q_test,
+    compute_pairwise_mcnemar,
 )
 
 # ---------------------------------------------------------------------------
@@ -141,172 +150,146 @@ def is_null_template_misconception(
 
 
 # ---------------------------------------------------------------------------
-# Core Analysis
+# Core Analysis (Semantic-Only Matching)
 # ---------------------------------------------------------------------------
-MatchMode = Literal["fuzzy", "semantic", "hybrid", "all"]
-
-
 def build_results_df(
     detections_dir: Path,
     manifest: dict[str, Any],
     groundtruth: list[dict[str, Any]],
-    match_mode: MatchMode,
+    semantic_threshold: float = 0.70,
     null_template_threshold: float = NULL_TEMPLATE_THRESHOLD,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Build results dataframe with matching."""
+    """
+    Build results dataframe using semantic embedding matching.
+
+    This is the core of the Cognitive Alignment measurement:
+    - We embed both the LLM's explanation and the ground truth student thinking
+    - High cosine similarity = LLM understood the mental model
+    - We track the raw semantic score for every detection for analysis
+    """
 
     gt_map = {m["id"]: m for m in groundtruth}
-    gt_embeddings = None
-    if match_mode in ("semantic", "hybrid", "all"):
-        console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
-        gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
+    console.print("[cyan]Precomputing groundtruth embeddings...[/cyan]")
+    gt_embeddings = precompute_groundtruth_embeddings(groundtruth)
 
     null_embeddings = build_null_template_embeddings()
 
     strategies = discover_strategies(detections_dir)
     console.print(f"[green]Strategies:[/green] {', '.join(strategies)}")
 
-    # Determine which matchers to run
-    if match_mode == "all":
-        modes = ["fuzzy", "semantic"]  # No hybrid - user requested only fuzzy + semantic
-    else:
-        modes = [match_mode]
+    rows: list[dict[str, Any]] = []
+    compliance_rows: list[dict[str, Any]] = []
+    det_count = 0
 
-    all_rows = []
-    compliance_rows = []
+    for strategy in strategies:
+        strategy_dir = detections_dir / strategy
+        detections = load_detections_for_strategy(strategy_dir)
+        console.print(f"  [dim]{strategy}: {len(detections)} files[/dim]")
 
-    for current_mode in modes:
-        console.print(f"[cyan]Running matcher: {current_mode}[/cyan]")
-        rows = []
-        det_count = 0
+        for det in detections:
+            det_count += 1
+            if det_count % 100 == 0:
+                console.print(f"    [dim]Processed {det_count} detections...[/dim]")
+            student = det.get("student", "")
+            question = det.get("question", "")
+            expected_id, is_clean = get_expected(manifest, student, question)
+            expected_category = (
+                gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
+            )
 
-        for strategy in strategies:
-            strategy_dir = detections_dir / strategy
-            detections = load_detections_for_strategy(strategy_dir)
-            console.print(f"  [dim]{strategy}: {len(detections)} files[/dim]")
+            for model, payload in det.get("models", {}).items():
+                mis_list = payload.get("misconceptions", []) or []
+                null_flags = [
+                    is_null_template_misconception(mis, null_embeddings, null_template_threshold)
+                    for mis in mis_list
+                ]
+                normalized_mis = [mis for mis, is_null in zip(mis_list, null_flags) if not is_null]
+                null_filtered = sum(1 for is_null in null_flags if is_null)
 
-            for det in detections:
-                det_count += 1
-                if det_count % 50 == 0:
-                    console.print(f"    [dim]Processed {det_count} detections...[/dim]")
-                student = det.get("student", "")
-                question = det.get("question", "")
-                expected_id, is_clean = get_expected(manifest, student, question)
-                expected_category = (
-                    gt_map.get(expected_id, {}).get("category", "") if expected_id else ""
+                compliance_rows.append(
+                    {
+                        "strategy": strategy,
+                        "model": model,
+                        "student": student,
+                        "question": question,
+                        "raw_misconceptions": len(mis_list),
+                        "null_filtered": null_filtered,
+                        "normalized_misconceptions": len(normalized_mis),
+                        "raw_empty": len(mis_list) == 0,
+                        "raw_nonempty": len(mis_list) > 0,
+                        "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
+                    }
                 )
+                has_tp = False
 
-                for model, payload in det.get("models", {}).items():
-                    mis_list = payload.get("misconceptions", []) or []
-                    null_flags = [
-                        is_null_template_misconception(mis, null_embeddings, null_template_threshold)
-                        for mis in mis_list
-                    ]
-                    normalized_mis = [
-                        mis for mis, is_null in zip(mis_list, null_flags) if not is_null
-                    ]
-                    null_filtered = sum(1 for is_null in null_flags if is_null)
+                for mis in normalized_mis:
+                    adapted = adapt_detection(mis)
 
-                    if current_mode == modes[0]:
-                        compliance_rows.append(
-                            {
-                                "strategy": strategy,
-                                "model": model,
-                                "student": student,
-                                "question": question,
-                                "raw_misconceptions": len(mis_list),
-                                "null_filtered": null_filtered,
-                                "normalized_misconceptions": len(normalized_mis),
-                                "raw_empty": len(mis_list) == 0,
-                                "raw_nonempty": len(mis_list) > 0,
-                                "null_only": len(mis_list) > 0 and len(normalized_mis) == 0,
-                            }
-                        )
-                    has_tp = False
+                    # Semantic matching - the core of Cognitive Alignment
+                    matched_id, semantic_score, match_method = semantic_match_misconception(
+                        adapted["name"],
+                        adapted["description"],
+                        adapted["student_belief"],
+                        groundtruth,
+                        threshold=semantic_threshold,
+                        precomputed_gt_embeddings=gt_embeddings,
+                    )
 
-                    for mis in normalized_mis:
-                        adapted = adapt_detection(mis)
+                    # Classify result based on semantic match
+                    if is_clean:
+                        result_type = "FP_CLEAN"
+                    elif matched_id == expected_id:
+                        result_type = "TP"
+                        has_tp = True
+                    elif matched_id:
+                        result_type = "FP_WRONG"
+                    else:
+                        result_type = "FP_HALLUCINATION"
 
-                        # Run appropriate matcher
-                        if current_mode == "fuzzy":
-                            matched_id, match_score, _ = fuzzy_match_misconception(
-                                adapted["name"], adapted["description"], groundtruth
-                            )
-                            fuzzy_score, semantic_score = match_score, 0.0
-                        elif current_mode == "semantic":
-                            matched_id, match_score, _ = semantic_match_misconception(
-                                adapted["name"],
-                                adapted["description"],
-                                adapted["student_belief"],
-                                groundtruth,
-                                precomputed_gt_embeddings=gt_embeddings,
-                            )
-                            fuzzy_score, semantic_score = 0.0, match_score
-                        else:  # hybrid
-                            result = hybrid_match_misconception(
-                                adapted, groundtruth, gt_embeddings=gt_embeddings
-                            )
-                            matched_id = result.matched_id
-                            match_score = result.score
-                            fuzzy_score = result.fuzzy_score
-                            semantic_score = result.semantic_score
+                    rows.append(
+                        {
+                            "strategy": strategy,
+                            "model": model,
+                            "student": student,
+                            "question": question,
+                            "expected_id": expected_id,
+                            "expected_category": expected_category,
+                            "is_clean": is_clean,
+                            "detected_name": adapted["name"],
+                            "detected_thinking": adapted["student_belief"][:200]
+                            if adapted["student_belief"]
+                            else "",
+                            "matched_id": matched_id,
+                            "semantic_score": semantic_score,
+                            "match_method": match_method,
+                            "result": result_type,
+                            "confidence": mis.get("confidence"),
+                        }
+                    )
 
-                        # Classify result
-                        if is_clean:
-                            result_type = "FP_CLEAN"
-                        elif matched_id == expected_id:
-                            result_type = "TP"
-                            has_tp = True
-                        elif matched_id:
-                            result_type = "FP_WRONG"
-                        else:
-                            result_type = "FP_HALLUCINATION"
+                # Record FN if no true positive found
+                if not is_clean and expected_id and not has_tp:
+                    rows.append(
+                        {
+                            "strategy": strategy,
+                            "model": model,
+                            "student": student,
+                            "question": question,
+                            "expected_id": expected_id,
+                            "expected_category": expected_category,
+                            "is_clean": False,
+                            "detected_name": "",
+                            "detected_thinking": "",
+                            "matched_id": None,
+                            "semantic_score": 0.0,
+                            "match_method": "no_detection",
+                            "result": "FN",
+                            "confidence": None,
+                        }
+                    )
 
-                        rows.append(
-                            {
-                                "match_mode": current_mode,
-                                "strategy": strategy,
-                                "model": model,
-                                "student": student,
-                                "question": question,
-                                "expected_id": expected_id,
-                                "expected_category": expected_category,
-                                "is_clean": is_clean,
-                                "detected_name": adapted["name"],
-                                "matched_id": matched_id,
-                                "fuzzy_score": fuzzy_score,
-                                "semantic_score": semantic_score,
-                                "match_score": match_score,
-                                "result": result_type,
-                                "confidence": mis.get("confidence"),
-                            }
-                        )
-
-                    # Record FN
-                    if not is_clean and expected_id and not has_tp:
-                        rows.append(
-                            {
-                                "match_mode": current_mode,
-                                "strategy": strategy,
-                                "model": model,
-                                "student": student,
-                                "question": question,
-                                "expected_id": expected_id,
-                                "expected_category": expected_category,
-                                "is_clean": False,
-                                "detected_name": "",
-                                "matched_id": None,
-                                "fuzzy_score": 0.0,
-                                "semantic_score": 0.0,
-                                "match_score": 0.0,
-                                "result": "FN",
-                                "confidence": None,
-                            }
-                        )
-
-        all_rows.extend(rows)
-
-    return pd.DataFrame(all_rows), pd.DataFrame(compliance_rows)
+    console.print(f"[green]Total detections processed: {det_count}[/green]")
+    return pd.DataFrame(rows), pd.DataFrame(compliance_rows)
 
 
 def compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
@@ -370,28 +353,64 @@ def metrics_by_group(df: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Chart Generation
+# Chart Generation (Publication-Grade)
 # ---------------------------------------------------------------------------
-def generate_charts(df: pd.DataFrame, assets_dir: Path, groundtruth: list[dict]) -> list[str]:
-    """Generate all charts for the report."""
+def generate_charts(
+    df: pd.DataFrame,
+    assets_dir: Path,
+    groundtruth: list[dict],
+    include_stats: bool = True,
+) -> list[str]:
+    """Generate all charts for the report with statistical rigor."""
     assets_dir.mkdir(parents=True, exist_ok=True)
     charts = []
 
-    # 1. Strategy F1 Comparison
+    # Use seaborn style for publication-quality plots
+    sns.set_style("whitegrid")
+    plt.rcParams.update({"font.size": 11, "axes.titlesize": 14, "axes.labelsize": 12})
+
+    # 1. Strategy F1 Comparison with Bootstrap CIs
     by_strat = metrics_by_group(df, ["strategy"])
     if not by_strat.empty:
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.bar(
-            by_strat["strategy"], by_strat["f1"], color=["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"]
-        )
+
+        # Compute bootstrap CIs if enabled
+        if include_stats:
+            cis = []
+            for strat in by_strat["strategy"]:
+                strat_df = df[df["strategy"] == strat]
+                ci = compute_all_metrics_with_ci(strat_df, n_bootstrap=500)
+                cis.append(ci["f1"])
+            by_strat["ci_lower"] = [c["ci_lower"] for c in cis]
+            by_strat["ci_upper"] = [c["ci_upper"] for c in cis]
+            yerr = [
+                by_strat["f1"] - by_strat["ci_lower"],
+                by_strat["ci_upper"] - by_strat["f1"],
+            ]
+            ax.bar(
+                by_strat["strategy"],
+                by_strat["f1"],
+                yerr=yerr,
+                capsize=5,
+                color=["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"],
+                edgecolor="black",
+                linewidth=1,
+            )
+        else:
+            ax.bar(
+                by_strat["strategy"],
+                by_strat["f1"],
+                color=["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"],
+            )
+
         ax.set_ylabel("F1 Score")
-        ax.set_title("F1 Score by Strategy")
+        ax.set_title("F1 Score by Prompting Strategy (with 95% CI)")
         ax.set_ylim(0, 1)
         for i, v in enumerate(by_strat["f1"]):
-            ax.text(i, v + 0.02, f"{v:.2f}", ha="center")
+            ax.text(i, v + 0.05, f"{v:.2f}", ha="center", fontweight="bold")
         plt.tight_layout()
         path = assets_dir / "strategy_f1.png"
-        plt.savefig(path, dpi=150)
+        plt.savefig(path, dpi=200, bbox_inches="tight")
         plt.close()
         charts.append("strategy_f1.png")
 
@@ -484,14 +503,52 @@ def generate_charts(df: pd.DataFrame, assets_dir: Path, groundtruth: list[dict])
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.barh(range(len(top_fps)), top_fps.values, color="#e74c3c")
             ax.set_yticks(range(len(top_fps)))
-            ax.set_yticklabels([n[:40] for n in top_fps.index])
+            ax.set_yticklabels([str(n)[:40] for n in top_fps.index])
             ax.set_xlabel("Count")
-            ax.set_title("Top False Positive Detections")
+            ax.set_title("Top False Positive Detections (Hallucinations)")
             plt.tight_layout()
             path = assets_dir / "hallucinations.png"
-            plt.savefig(path, dpi=150)
+            plt.savefig(path, dpi=200, bbox_inches="tight")
             plt.close()
             charts.append("hallucinations.png")
+
+    # 7. NEW: Semantic Confidence Distribution (The "Understanding" Chart)
+    if "semantic_score" in df.columns:
+        tp_scores = df[df["result"] == "TP"]["semantic_score"].dropna()
+        fp_scores = df[df["result"].str.startswith("FP")]["semantic_score"].dropna()
+
+        if len(tp_scores) > 10 and len(fp_scores) > 10:
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+            # Plot overlapping histograms
+            ax.hist(
+                tp_scores,
+                bins=30,
+                alpha=0.7,
+                label=f"True Positives (n={len(tp_scores)}, μ={tp_scores.mean():.2f})",
+                color="#2ecc71",
+                edgecolor="white",
+            )
+            ax.hist(
+                fp_scores,
+                bins=30,
+                alpha=0.7,
+                label=f"False Positives (n={len(fp_scores)}, μ={fp_scores.mean():.2f})",
+                color="#e74c3c",
+                edgecolor="white",
+            )
+
+            ax.axvline(0.70, color="black", linestyle="--", linewidth=2, label="Threshold (0.70)")
+            ax.set_xlabel("Semantic Similarity Score")
+            ax.set_ylabel("Frequency")
+            ax.set_title("Semantic Confidence Distribution: TP vs FP")
+            ax.legend()
+            ax.set_xlim(0, 1)
+            plt.tight_layout()
+            path = assets_dir / "semantic_distribution.png"
+            plt.savefig(path, dpi=200, bbox_inches="tight")
+            plt.close()
+            charts.append("semantic_distribution.png")
 
     return charts
 
@@ -791,77 +848,83 @@ def analyze(
 
 @app.command()
 def analyze_multi(
-    run_name: str = typer.Option(..., help="Descriptive run name (e.g., 'full_baseline_30students')"),
-    match_mode: str = typer.Option("all", help="Match mode: fuzzy, semantic, hybrid, or all"),
+    run_name: str = typer.Option(..., help="Descriptive run name (e.g., 'analysisv2')"),
+    semantic_threshold: float = typer.Option(
+        0.70, help="Semantic similarity threshold for matching"
+    ),
 ):
-    """Run multi-assignment analysis combining a1, a2, a3 into one unified report."""
-    console.print("[bold cyan]═══ Multi-Assignment Analysis ═══[/bold cyan]")
+    """Run multi-assignment analysis with semantic matching and statistical rigor."""
+    console.print("[bold cyan]═══ Multi-Assignment Analysis v2 (Semantic) ═══[/bold cyan]")
     console.print(f"Run name: {run_name}")
-    console.print(f"Match mode: {match_mode}")
-    
+    console.print(f"Semantic threshold: {semantic_threshold}")
+
     ASSIGNMENTS = ["a1", "a2", "a3"]
     all_dfs = []
     all_compliance_dfs = []
     combined_groundtruth: list[dict[str, Any]] = []
     total_students = 0
     seeds = []
-    
+
     for assignment in ASSIGNMENTS:
         console.print(f"\n[cyan]Processing {assignment}...[/cyan]")
-        
+
         detections_dir = Path(f"detections/{assignment}_multi")
         manifest_path = Path(f"authentic_seeded/{assignment}/manifest.json")
         groundtruth_path = Path(f"data/{assignment}/groundtruth.json")
-        
+
         if not detections_dir.exists():
             console.print(f"[yellow]Warning: {detections_dir} not found, skipping[/yellow]")
             continue
-            
+
         manifest = load_manifest(manifest_path)
         groundtruth = load_groundtruth(groundtruth_path)
-        
+
         # Add to combined groundtruth (avoiding duplicates by ID)
         existing_ids = {gt["id"] for gt in combined_groundtruth}
         for gt in groundtruth:
             if gt["id"] not in existing_ids:
                 combined_groundtruth.append(gt)
-        
+
         total_students += manifest.get("student_count", 0)
         if manifest.get("seed"):
             seeds.append(str(manifest["seed"]))
-        
+
         console.print(f"  Students: {manifest.get('student_count', 'N/A')}")
         console.print(f"  Misconceptions: {len(groundtruth)}")
-        
-        df, compliance_df = build_results_df(detections_dir, manifest, groundtruth, match_mode)
-        
+
+        df, compliance_df = build_results_df(
+            detections_dir, manifest, groundtruth, semantic_threshold=semantic_threshold
+        )
+
         if not df.empty:
             df["assignment"] = assignment
             all_dfs.append(df)
-        
+
         if not compliance_df.empty:
             compliance_df["assignment"] = assignment
             all_compliance_dfs.append(compliance_df)
-    
+
     if not all_dfs:
         console.print("[red]No results from any assignment![/red]")
         return
-    
+
     # Combine all DataFrames
     combined_df = pd.concat(all_dfs, ignore_index=True)
-    combined_compliance_df = pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
-    
+    combined_compliance_df = (
+        pd.concat(all_compliance_dfs, ignore_index=True) if all_compliance_dfs else pd.DataFrame()
+    )
+
     console.print(f"\n[bold]Combined dataset:[/bold]")
     console.print(f"  Total students processed: {total_students}")
     console.print(f"  Total detection rows: {len(combined_df)}")
     console.print(f"  Unique misconceptions: {len(combined_groundtruth)}")
-    
+
     # Compute overall metrics
     overall = compute_metrics(combined_df)
     console.print(
         f"\n[bold]Overall:[/bold] P={overall['precision']:.3f} R={overall['recall']:.3f} F1={overall['f1']:.3f}"
     )
-    
+
     # Per-assignment metrics
     console.print("\n[bold]By Assignment[/bold]")
     by_assignment = metrics_by_group(combined_df, ["assignment"])
@@ -884,23 +947,23 @@ def analyze_multi(
             f"{row['f1']:.3f}",
         )
     console.print(table)
-    
+
     # Create run directory
     run_id = run_name if run_name.startswith("run_") else f"run_{run_name}"
     run_dir = Path("runs/multi") / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     assets_dir = run_dir / "assets"
     assets_dir.mkdir(exist_ok=True)
-    
+
     # Save CSVs
     combined_df.to_csv(run_dir / "results.csv", index=False)
     (run_dir / "metrics.json").write_text(json.dumps(overall, indent=2))
     if not combined_compliance_df.empty:
         combined_compliance_df.to_csv(run_dir / "compliance.csv", index=False)
-    
+
     # Generate charts
     charts = generate_charts(combined_df, assets_dir, combined_groundtruth)
-    
+
     # Generate assignment comparison chart
     if not by_assignment.empty:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -920,24 +983,37 @@ def analyze_multi(
         fig.savefig(assets_dir / "assignment_comparison.png", dpi=150)
         plt.close(fig)
         charts.append("assignment_comparison.png")
-    
+
     # Generate report
     by_strategy = metrics_by_group(combined_df, ["strategy"])
     by_model = metrics_by_group(combined_df, ["model"])
-    by_category = metrics_by_group(combined_df[combined_df["expected_category"].notna()], ["expected_category"])
-    by_misconception = metrics_by_group(combined_df[combined_df["expected_id"].notna()], ["expected_id"])
-    
+    by_category = metrics_by_group(
+        combined_df[combined_df["expected_category"].notna()], ["expected_category"]
+    )
+    by_misconception = metrics_by_group(
+        combined_df[combined_df["expected_id"].notna()], ["expected_id"]
+    )
+
     # Build combined manifest for report
     combined_manifest = {
         "student_count": total_students,
         "seed": ",".join(seeds) if seeds else "multiple",
     }
-    
+
     report_path = generate_multi_report(
-        combined_df, by_assignment, by_strategy, by_model, by_category, by_misconception,
-        combined_groundtruth, combined_manifest, run_dir, match_mode, charts
+        combined_df,
+        by_assignment,
+        by_strategy,
+        by_model,
+        by_category,
+        by_misconception,
+        combined_groundtruth,
+        combined_manifest,
+        run_dir,
+        "semantic",  # Always semantic matching
+        charts,
     )
-    
+
     console.print(f"[green]Report:[/green] {report_path}")
     console.print("[bold green]✓ Multi-assignment analysis complete[/bold green]")
 
@@ -955,53 +1031,78 @@ def generate_multi_report(
     match_mode: str,
     charts: list[str],
 ) -> Path:
-    """Generate unified multi-assignment report."""
+    """Generate unified multi-assignment report with statistical rigor."""
     gt_map = {gt["id"]: gt for gt in groundtruth}
     overall = compute_metrics(df)
-    
+
+    # Compute bootstrap CIs for overall metrics
+    console.print("[cyan]Computing bootstrap confidence intervals...[/cyan]")
+    overall_with_ci = compute_all_metrics_with_ci(df, n_bootstrap=1000)
+
     lines = [
         "# Multi-Assignment LLM Misconception Detection Report",
         f"_Generated: {datetime.now(timezone.utc).isoformat()}_",
         "",
+        "## Executive Summary",
+        "",
+        "This report evaluates LLM cognitive alignment with CS education theory by measuring",
+        "whether models can identify *student mental models* (Notional Machines), not just surface-level bugs.",
+        "",
+        "**Key Finding:** Semantic embedding matching reveals the gap between detecting *what* is wrong",
+        "versus understanding *why* the student thought it was right.",
+        "",
+        "---",
+        "",
         "## Dataset Summary",
         f"- **Total Students:** {manifest.get('student_count', 'N/A')}",
-        f"- **Assignments:** a1, a2, a3",
-        f"- **Match Mode:** {match_mode}",
+        f"- **Assignments:** a1 (Variables), a2 (Loops), a3 (Arrays)",
+        f"- **Matching Method:** Semantic Embedding (Cosine Similarity ≥ 0.70)",
         f"- **Seeds:** {manifest.get('seed', 'N/A')}",
         "",
-        "## Overall Metrics",
-        "| Metric | Value |",
-        "|--------|-------|",
-        f"| True Positives | {overall['tp']} |",
-        f"| False Positives | {overall['fp']} |",
-        f"| False Negatives | {overall['fn']} |",
-        f"| **Precision** | **{overall['precision']:.3f}** |",
-        f"| **Recall** | **{overall['recall']:.3f}** |",
-        f"| **F1 Score** | **{overall['f1']:.3f}** |",
+        "## Overall Metrics (with 95% Confidence Intervals)",
+        "",
+        "| Metric | Value | 95% CI | Std Error |",
+        "|--------|-------|--------|-----------|",
+        f"| True Positives | {overall['tp']} | — | — |",
+        f"| False Positives | {overall['fp']} | — | — |",
+        f"| False Negatives | {overall['fn']} | — | — |",
+        f"| **Precision** | **{overall_with_ci['precision']['estimate']:.3f}** | [{overall_with_ci['precision']['ci_lower']:.3f}, {overall_with_ci['precision']['ci_upper']:.3f}] | {overall_with_ci['precision']['std_error']:.4f} |",
+        f"| **Recall** | **{overall_with_ci['recall']['estimate']:.3f}** | [{overall_with_ci['recall']['ci_lower']:.3f}, {overall_with_ci['recall']['ci_upper']:.3f}] | {overall_with_ci['recall']['std_error']:.4f} |",
+        f"| **F1 Score** | **{overall_with_ci['f1']['estimate']:.3f}** | [{overall_with_ci['f1']['ci_lower']:.3f}, {overall_with_ci['f1']['ci_upper']:.3f}] | {overall_with_ci['f1']['std_error']:.4f} |",
         "",
     ]
-    
-    # Cross-Assignment Comparison
-    lines.extend([
-        "## Cross-Assignment Comparison",
-        "| Assignment | TP | FP | FN | Precision | Recall | F1 |",
-        "|------------|----|----|----|-----------| -------|-----|",
-    ])
+
+    # Cross-Assignment Comparison (RQ1: Complexity Gradient)
+    lines.extend(
+        [
+            "## Cross-Assignment Comparison (RQ1: Complexity Gradient)",
+            "",
+            "> Does LLM performance degrade as conceptual complexity increases?",
+            "",
+            "| Assignment | Focus | TP | FP | FN | Precision | Recall | F1 |",
+            "|------------|-------|----|----|----|-----------| -------|-----|",
+        ]
+    )
+    assignment_focus = {"a1": "Variables/Math", "a2": "Loops/Control", "a3": "Arrays/Strings"}
     for _, row in by_assignment.iterrows():
+        focus = assignment_focus.get(row["assignment"], "")
         lines.append(
-            f"| {row['assignment']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
+            f"| {row['assignment']} | {focus} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
         )
     lines.append("")
     if "assignment_comparison.png" in charts:
         lines.append("![Assignment Comparison](assets/assignment_comparison.png)")
         lines.append("")
-    
-    # Strategy section
-    lines.extend([
-        "## Performance by Strategy",
-        "| Strategy | TP | FP | FN | Precision | Recall | F1 |",
-        "|----------|----|----|----|-----------| -------|-----|",
-    ])
+
+    # Strategy section with statistical significance
+    lines.extend(
+        [
+            "## Performance by Prompting Strategy",
+            "",
+            "| Strategy | TP | FP | FN | Precision | Recall | F1 |",
+            "|----------|----|----|----|-----------| -------|-----|",
+        ]
+    )
     for _, row in by_strategy.iterrows():
         lines.append(
             f"| {row['strategy']} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
@@ -1010,15 +1111,59 @@ def generate_multi_report(
     if "strategy_f1.png" in charts:
         lines.append("![Strategy F1](assets/strategy_f1.png)")
         lines.append("")
-    
+
+    # McNemar's Test for Strategy Comparison
+    console.print("[cyan]Computing McNemar's tests for strategy comparison...[/cyan]")
+    strategies = df["strategy"].unique().tolist()
+    if len(strategies) >= 2:
+        mcnemar_results = compute_pairwise_mcnemar(df, strategies)
+        if not mcnemar_results.empty:
+            lines.extend(
+                [
+                    "### Statistical Significance (McNemar's Test)",
+                    "",
+                    "> Paired comparison since the same student code is analyzed by all strategies.",
+                    "",
+                    "| Comparison | χ² | p-value | Significant? | Interpretation |",
+                    "|------------|-----|---------|--------------|----------------|",
+                ]
+            )
+            for _, row in mcnemar_results.iterrows():
+                sig = "✓ Yes" if row.get("significant") else "✗ No"
+                stat = f"{row['statistic']:.2f}" if row.get("statistic") else "—"
+                pval = f"{row['p_value']:.4f}" if row.get("p_value") else "—"
+                interp = str(row.get("interpretation", ""))[:50]
+                lines.append(
+                    f"| {row['strategy_a']} vs {row['strategy_b']} | {stat} | {pval} | {sig} | {interp} |"
+                )
+            lines.append("")
+
+    # Cochran's Q Test
+    cochran = compute_cochran_q_test(df, strategies)
+    if cochran.get("statistic"):
+        lines.extend(
+            [
+                "### Omnibus Test (Cochran's Q)",
+                "",
+                f"- **Q Statistic:** {cochran['statistic']:.2f}",
+                f"- **Degrees of Freedom:** {cochran['df']}",
+                f"- **p-value:** {cochran['p_value']:.6f}",
+                f"- **Conclusion:** {'Significant differences exist between strategies' if cochran['significant'] else 'No significant differences between strategies'}",
+                "",
+            ]
+        )
+
     # Model section
-    lines.extend([
-        "## Performance by Model",
-        "| Model | TP | FP | FN | Precision | Recall | F1 |",
-        "|-------|----|----|----|-----------|--------|-----|",
-    ])
+    lines.extend(
+        [
+            "## Performance by Model",
+            "",
+            "| Model | TP | FP | FN | Precision | Recall | F1 |",
+            "|-------|----|----|----|-----------|--------|-----|",
+        ]
+    )
     for _, row in by_model.iterrows():
-        model_short = row["model"].split("/")[-1]
+        model_short = str(row["model"]).split("/")[-1]
         lines.append(
             f"| {model_short} | {row['tp']} | {row['fp']} | {row['fn']} | {row['precision']:.3f} | {row['recall']:.3f} | {row['f1']:.3f} |"
         )
@@ -1026,46 +1171,104 @@ def generate_multi_report(
     if "model_comparison.png" in charts:
         lines.append("![Model Comparison](assets/model_comparison.png)")
         lines.append("")
-    
-    # Category section
+
+    # Category section (RQ2: Notional Machine Detection)
     if not by_category.empty:
-        lines.extend([
-            "## Notional Machine Category Detection (RQ2)",
-            "",
-            "> This table shows which mental model categories are easier/harder for LLMs to detect.",
-            "",
-            "| Category | Recall | N |",
-            "|----------|--------|---|",
-        ])
+        lines.extend(
+            [
+                "## Notional Machine Category Detection (RQ2)",
+                "",
+                "> Which mental model categories are easier/harder for LLMs to detect?",
+                "> This is the core finding: Surface errors (Syntax) vs Deep errors (State).",
+                "",
+                "| Category | Recall | N | Difficulty |",
+                "|----------|--------|---|------------|",
+            ]
+        )
         by_category = by_category.sort_values("recall")
         for _, row in by_category.iterrows():
             n = row["tp"] + row["fn"]
-            lines.append(f"| {row['expected_category']} | {row['recall']:.3f} | {n} |")
+            recall = row["recall"]
+            if recall >= 0.7:
+                difficulty = "Easy"
+            elif recall >= 0.5:
+                difficulty = "Medium"
+            else:
+                difficulty = "**Hard**"
+            lines.append(f"| {row['expected_category']} | {recall:.3f} | {n} | {difficulty} |")
         lines.append("")
         if "category_recall.png" in charts:
             lines.append("![Category Recall](assets/category_recall.png)")
             lines.append("")
-    
+
+    # Semantic Confidence Analysis
+    if "semantic_score" in df.columns:
+        semantic_stats = analyze_semantic_scores(df, "semantic_score")
+        if semantic_stats.get("tp_count", 0) > 0:
+            lines.extend(
+                [
+                    "## Semantic Alignment Analysis (The 'Understanding' Metric)",
+                    "",
+                    "> How confident is the semantic match? Higher scores = LLM truly understood the mental model.",
+                    "",
+                    "| Metric | True Positives | False Positives |",
+                    "|--------|----------------|-----------------|",
+                    f"| Count | {semantic_stats.get('tp_count', 0)} | {semantic_stats.get('fp_count', 0)} |",
+                    f"| Mean Score | {semantic_stats.get('tp_mean', 0):.3f} | {semantic_stats.get('fp_mean', 0):.3f} |",
+                    f"| Std Dev | {semantic_stats.get('tp_std', 0):.3f} | {semantic_stats.get('fp_std', 0):.3f} |",
+                    f"| Median | {semantic_stats.get('tp_median', 0):.3f} | {semantic_stats.get('fp_median', 0):.3f} |",
+                    "",
+                ]
+            )
+            if semantic_stats.get("separation_test"):
+                sep = semantic_stats["separation_test"]
+                lines.extend(
+                    [
+                        "### Score Separation Test (Mann-Whitney U)",
+                        "",
+                        f"- **U Statistic:** {sep.get('statistic', 0):.2f}",
+                        f"- **p-value:** {sep.get('p_value', 1):.6f}",
+                        f"- **Interpretation:** {sep.get('interpretation', '')}",
+                        "",
+                    ]
+                )
+            if semantic_stats.get("effect_size"):
+                eff = semantic_stats["effect_size"]
+                lines.extend(
+                    [
+                        f"- **Effect Size (Cliff's Delta):** {eff.get('delta', 0):.3f} ({eff.get('interpretation', '')})",
+                        "",
+                    ]
+                )
+        if "semantic_distribution.png" in charts:
+            lines.append("![Semantic Distribution](assets/semantic_distribution.png)")
+            lines.append("")
+
     # Heatmap
     if "strategy_model_heatmap.png" in charts:
-        lines.extend([
-            "## Strategy × Model Heatmap",
-            "![Heatmap](assets/strategy_model_heatmap.png)",
-            "",
-        ])
-    
+        lines.extend(
+            [
+                "## Strategy × Model Heatmap",
+                "![Heatmap](assets/strategy_model_heatmap.png)",
+                "",
+            ]
+        )
+
     # Per-misconception
     if not by_misconception.empty:
-        lines.extend([
-            "## Per-Misconception Detection Rates",
-            "| ID | Name | Category | Recall | N |",
-            "|----|------|----------|--------|---|",
-        ])
+        lines.extend(
+            [
+                "## Per-Misconception Detection Rates",
+                "",
+                "| ID | Name | Category | Recall | N |",
+                "|----|------|----------|--------|---|",
+            ]
+        )
         by_misconception = by_misconception.sort_values("recall")
         for _, row in by_misconception.iterrows():
             mid = row["expected_id"]
             gt = gt_map.get(mid, {})
-            name = gt.get("name", mid)[:35]
+            name = gt.get("name", str(mid))[:35]
             cat = gt.get("category", "")[:25]
             n = row["tp"] + row["fn"]
             lines.append(f"| {mid} | {name} | {cat} | {row['recall']:.2f} | {n} |")
@@ -1073,18 +1276,39 @@ def generate_multi_report(
         if "misconception_recall.png" in charts:
             lines.append("![Misconception Recall](assets/misconception_recall.png)")
             lines.append("")
-    
+
     # Hallucinations
     if "hallucinations.png" in charts:
-        lines.extend([
-            "## False Positive Analysis",
-            "![Hallucinations](assets/hallucinations.png)",
+        lines.extend(
+            [
+                "## False Positive Analysis (Hallucinations)",
+                "",
+                "> These are misconceptions the LLM 'invented' that don't match any ground truth.",
+                "",
+                "![Hallucinations](assets/hallucinations.png)",
+                "",
+            ]
+        )
+
+    # Methodology note
+    lines.extend(
+        [
+            "---",
             "",
-        ])
-    
+            "## Methodology Notes",
+            "",
+            "- **Semantic Matching:** Uses OpenAI `text-embedding-3-large` to embed both LLM explanations and ground truth student thinking.",
+            "- **Threshold:** Cosine similarity ≥ 0.70 required for a True Positive.",
+            "- **Bootstrap CI:** 1000 resamples with replacement for confidence intervals.",
+            "- **McNemar's Test:** Paired comparison with continuity correction.",
+            "",
+        ]
+    )
+
     report_path = run_dir / "report.md"
     report_path.write_text("\n".join(lines))
     return report_path
+
 
 @app.command()
 def list_runs():
