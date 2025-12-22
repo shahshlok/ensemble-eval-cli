@@ -1,150 +1,425 @@
-# CLI Reference
+# CLI Reference: Command-Line Tools
 
-This document covers all command-line interfaces in the project.
+**Status:** Analysis 3 Complete  
+**Updated:** December 22, 2025
+
+---
 
 ## Quick Reference
 
-| Command              | Entry Point            | Purpose                      |
-| -------------------- | ---------------------- | ---------------------------- |
-| `uv run pipeline`    | `pipeline.py`          | Full pipeline wizard         |
-| `uv run miscons`     | `dataset_generator.py` | Generate synthetic students  |
-| `uv run llm-miscons` | `llm_miscons_cli.py`   | Run LLM detection            |
-| `uv run analyze`     | `analyze_cli.py`       | Analyze and generate reports |
+| Command | Entry Point | Purpose | Status |
+|---------|-------------|---------|--------|
+| `uv run python analyze.py` | `analyze.py` | Single-strategy and ensemble analysis | ✅ Primary tool |
+| `uv run python llm_miscons_cli.py` | `llm_miscons_cli.py` | Run LLM detection | ✅ Available |
+| `uv run python dataset_generator.py` | `dataset_generator.py` | Generate synthetic students | ✅ Available |
 
 ---
 
-## 1. Pipeline (Full Workflow)
+## Main Command: `analyze.py`
+
+### Purpose
+Analyzes LLM detection outputs against ground truth using semantic matching and ensemble voting.
+
+### Basic Usage
 
 ```bash
-uv run pipeline
+# Single-strategy analysis (Analysis 2.2 mode)
+uv run python analyze.py analyze-multi \
+  --run-name my-analysis \
+  --semantic-threshold 0.65 \
+  --noise-floor 0.55
+
+# Ensemble voting analysis (Analysis 3 mode) ⭐ RECOMMENDED
+uv run python analyze.py analyze-ensemble \
+  --run-name my-analysis \
+  --ensemble-threshold 2 \
+  --semantic-threshold 0.65 \
+  --noise-floor 0.55
 ```
 
-Interactive wizard that runs all 3 stages:
-1. Generate manifest + student submissions  
-2. Run misconception detection (3 LLMs × 4 strategies)
-3. Analyze with matcher ablation
+---
+
+## Command 1: `analyze-multi` (Single-Strategy Analysis)
+
+Analyzes detections from a single strategy or all strategies independently.
+
+### Signature
+
+```bash
+uv run python analyze.py analyze-multi [OPTIONS]
+```
 
 ### Options
 
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--run-name` | str | auto | Custom run identifier (no spaces) |
+| `--semantic-threshold` | float | 0.65 | Cosine similarity threshold for match |
+| `--noise-floor` | float | 0.55 | Below this score, discard detection |
+| `--assignment` | str | multi | Which assignment(s): a1, a2, a3, or multi |
+| `--strategy` | str | all | Which strategy: baseline, taxonomy, cot, socratic, or all |
+| `--output-dir` | str | runs/multi | Where to save results |
+| `--verbose` | flag | false | Print detailed progress |
+
+### Example: Analyze All Strategies (Analysis 2.2)
+
 ```bash
-uv run pipeline run \
-  --students 60 \           # Number of students
-  --seed 12345 \            # Random seed
-  --strategies baseline,taxonomy,cot,socratic \
-  --run-tag my-experiment \ # Custom run ID
-  --notes "Testing new prompt" \
-  --skip-generation \       # Skip step 1
-  --skip-detection \        # Skip step 2
-  --skip-analysis           # Skip step 3
+uv run python analyze.py analyze-multi \
+  --run-name analysis2.2 \
+  --assignment multi \
+  --strategy all \
+  --semantic-threshold 0.65 \
+  --noise-floor 0.55 \
+  --output-dir runs/multi \
+  --verbose
 ```
 
-### Quick Test
+**Output:** `runs/multi/run_analysis2.2/`
+- `report.md` — Markdown report with embedded charts
+- `metrics.json` — Numeric results (precision, recall, F1)
+- `results.csv` — Per-file breakdown
+- `compliance.csv` — TP/FP/FN classification
+- `assets/` — 8 PNG charts
+
+### Example: Analyze Single Assignment
 
 ```bash
-uv run pipeline quick --students 10 --strategy minimal
+uv run python analyze.py analyze-multi \
+  --run-name a1-only \
+  --assignment a1 \
+  --strategy baseline \
+  --semantic-threshold 0.65
 ```
 
 ---
 
-## 2. Dataset Generation
+## Command 2: `analyze-ensemble` (Ensemble Voting Analysis) ⭐ NEW
+
+Applies ensemble voting: requires ≥N strategies to agree on the same misconception.
+
+### Signature
 
 ```bash
-uv run miscons
+uv run python analyze.py analyze-ensemble [OPTIONS]
 ```
-
-Generates synthetic student Java files with seeded misconceptions.
-
-### What It Does
-
-1. Loads `groundtruth.json` misconception definitions
-2. Creates `manifest.json` assigning students to misconceptions
-3. Calls GPT-5.1 to generate Java code for each student×question
-
-### Distribution
-
-- 40% Perfect students (all clean files)
-- 35% Single-issue (1 misconception)
-- 15% Multi-issue (2 misconceptions)
-- 10% Struggling (3+ misconceptions)
-
----
-
-## 3. LLM Detection
-
-```bash
-uv run llm-miscons detect --strategy taxonomy --students 0
-```
-
-Runs LLM misconception detection on generated files.
 
 ### Options
 
-| Option           | Default       | Description                       |
-| ---------------- | ------------- | --------------------------------- |
-| `--strategy`     | taxonomy      | baseline, taxonomy, cot, socratic |
-| `--students`     | 0             | Number to process (0 = all)       |
-| `--output`       | detections/a1 | Output directory                  |
-| `--no-reasoning` | false         | Disable reasoning model variants  |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--run-name` | str | auto | Custom run identifier |
+| `--ensemble-threshold` | int | 2 | Min strategies that must agree (1-4) |
+| `--semantic-threshold` | float | 0.65 | Cosine similarity threshold |
+| `--noise-floor` | float | 0.55 | Discard scores < this |
+| `--assignment` | str | multi | Which assignment(s) |
+| `--output-dir` | str | runs/multi | Where to save |
+| `--verbose` | flag | false | Detailed logging |
 
-### Run All Strategies
+### Example: Ensemble Voting (N≥2) — RECOMMENDED
 
 ```bash
-uv run llm-miscons all-strategies --students 0
+uv run python analyze.py analyze-ensemble \
+  --run-name analysis3 \
+  --ensemble-threshold 2 \
+  --semantic-threshold 0.65 \
+  --noise-floor 0.55 \
+  --verbose
 ```
 
-### Models Used
+**Expected Output:**
+```
+┌─────────────────────────────────────────┐
+│         ENSEMBLE VOTING RESULTS          │
+├─────────────────────────────────────────┤
+│ Applying ensemble filter (2/4 required) │
+│                                          │
+│ Metrics:                                │
+│ ├─ Precision: 0.649 (+107% vs 2.2)  ✅ │
+│ ├─ Recall: 0.871 (stable) ✅           │
+│ ├─ F1: 0.744 (+61%) ✅                │
+│ ├─ True Positives: 2,150              │
+│ ├─ False Positives: 1,164 (-75%)      │
+│ └─ False Negatives: 318               │
+│                                         │
+│ By Assignment:                         │
+│ ├─ A3 (Arrays): F1 = 0.890           │
+│ ├─ A2 (Loops): F1 = 0.751            │
+│ └─ A1 (Variables): F1 = 0.592 ⚠️     │
+│                                         │
+│ Saved to: runs/multi/run_analysis3/   │
+└─────────────────────────────────────────┘
+```
 
-| Model                                   | Short Name       |
-| --------------------------------------- | ---------------- |
-| openai/gpt-5.1                          | GPT-5.1          |
-| google/gemini-2.5-flash-preview-09-2025 | Gemini-2.5-Flash |
-| anthropic/claude-haiku-4.5              | Haiku-4.5        |
+### Example: Ablation Study (Compare N≥2 vs N≥3)
 
-Plus `:reasoning` variants for each.
+```bash
+# N≥2 (Moderate Consensus)
+uv run python analyze.py analyze-ensemble \
+  --run-name ablation_n2 \
+  --ensemble-threshold 2
+
+# N≥3 (Strong Consensus)
+uv run python analyze.py analyze-ensemble \
+  --run-name ablation_n3 \
+  --ensemble-threshold 3
+
+# N≥4 (Unanimous)
+uv run python analyze.py analyze-ensemble \
+  --run-name ablation_n4 \
+  --ensemble-threshold 4
+```
+
+**Expected Results:**
+| Threshold | Precision | Recall | F1 |
+|-----------|-----------|--------|-----|
+| N≥2 | 0.649 | 0.871 | **0.744** |
+| N≥3 | ~0.75 | ~0.80 | ~0.77 |
+| N≥4 | ~0.90 | ~0.60 | ~0.72 |
 
 ---
 
-## 4. Analysis
+## Output Files
 
-```bash
-uv run analyze analyze --match-mode hybrid
+After running either `analyze-multi` or `analyze-ensemble`, you get:
+
+### 1. `report.md` — Main Results Report
+
+Markdown file with:
+- Executive summary (key metrics)
+- Results by assignment (complexity gradient)
+- Results by strategy (prompt effectiveness)
+- Results by model (LLM comparison)
+- Misconception-specific recall (hardest categories)
+- Visualizations (PNG images embedded)
+- Interpretation & conclusions
+
+**Example Reading:**
+```
+## By Assignment (Complexity Gradient)
+
+| Assignment | Precision | Recall | F1 |
+|--------|-----------|--------|-----|
+| A3: Arrays/Strings | 0.810 | 0.989 | 0.890 ✅ |
+| A2: Loops/Control | 0.653 | 0.885 | 0.751 |
+| A1: Variables/Math | 0.499 | 0.728 | 0.592 ⚠️ |
+
+**Interpretation:**
+30% F1 drop from A3→A1 suggests LLMs struggle with abstract state.
 ```
 
-Analyzes detections against ground truth and generates reports.
+### 2. `metrics.json` — Numeric Results
 
-### Options
-
-| Option         | Default | Description                            |
-| -------------- | ------- | -------------------------------------- |
-| `--match-mode` | hybrid  | fuzzy_only, semantic_only, hybrid, all |
-| `--run-tag`    | auto    | Custom run identifier                  |
-| `--notes`      | ""      | Notes for this run                     |
-| `--quick`      | false   | Fewer bootstrap iterations             |
-
-### Matcher Ablation
-
-```bash
-uv run analyze analyze --match-mode all --run-tag ablation-study
+```json
+{
+  "analysis_3": {
+    "overall": {
+      "precision": 0.649,
+      "recall": 0.871,
+      "f1": 0.744,
+      "tp": 2150,
+      "fp": 1164,
+      "fn": 318
+    },
+    "by_assignment": {
+      "a1": {
+        "precision": 0.499,
+        "recall": 0.728,
+        "f1": 0.592
+      },
+      "a2": {
+        "precision": 0.653,
+        "recall": 0.885,
+        "f1": 0.751
+      },
+      "a3": {
+        "precision": 0.810,
+        "recall": 0.989,
+        "f1": 0.890
+      }
+    },
+    "by_strategy": {
+      "baseline": {"precision": 0.714, "recall": 0.796, "f1": 0.753},
+      "taxonomy": {"precision": 0.654, "recall": 0.832, "f1": 0.734},
+      "cot": {"precision": 0.668, "recall": 0.850, "f1": 0.750},
+      "socratic": {"precision": 0.584, "recall": 0.923, "f1": 0.726}
+    },
+    "by_model": {
+      "claude-haiku:reasoning": {"precision": 0.784, "recall": 0.857, "f1": 0.819},
+      "gpt-5.2:reasoning": {"precision": 0.702, "recall": 0.897, "f1": 0.788},
+      "gpt-5.2": {"precision": 0.690, "recall": 0.895, "f1": 0.779},
+      "claude-haiku": {"precision": 0.697, "recall": 0.813, "f1": 0.751},
+      "gemini-3-flash:reasoning": {"precision": 0.551, "recall": 0.887, "f1": 0.680},
+      "gemini-3-flash": {"precision": 0.531, "recall": 0.877, "f1": 0.661}
+    }
+  }
+}
 ```
 
-Compares all 3 matchers on the same data.
+### 3. `results.csv` — Per-File Results
 
-### Output
+```
+student,question,strategy,model,expected_id,matched_id,score,result
+Anderson_Charles_664944,Q1,baseline,gpt-5.2,NM_STATE_01,NM_STATE_01,0.78,TP
+Anderson_Charles_664944,Q1,taxonomy,gpt-5.2,NM_STATE_01,NM_STATE_01,0.82,TP
+Anderson_Charles_664944,Q1,cot,gpt-5.2,NM_STATE_01,NM_STATE_01,0.79,TP
+Anderson_Charles_664944,Q1,socratic,gpt-5.2,NM_STATE_01,NM_IO_01,0.58,FP_CLEAN
+Baker_Carolyn_647344,Q2,baseline,claude-haiku,NM_IO_01,NM_IO_01,0.81,TP
+...
+```
 
-Saves to `runs/a1/run_{id}/`:
-- `report.md` - Full analysis with embedded charts
-- `config.json` - Run configuration
-- `data.json` - Raw metrics and opportunities
-- `assets/` - PNG visualizations
+### 4. `compliance.csv` — Classification Summary
+
+```
+student,question,assignment,clean_or_seeded,expected_id,ensemble_result
+Anderson_Charles_664944,Q1,A1,seeded,NM_STATE_01,TP
+Anderson_Charles_664944,Q2,A1,clean,,TN
+Anderson_Charles_664944,Q3,A1,seeded,NM_IO_01,FN
+Baker_Carolyn_647344,Q1,A1,seeded,NM_STATE_01,TP
+...
+```
+
+### 5. `assets/` — Visualization Charts (PNG)
+
+Generated charts:
+- `assignment_comparison.png` — Bar chart: F1 by assignment
+- `strategy_f1.png` — Bar chart: F1 by prompting strategy
+- `model_comparison.png` — Bar chart: F1 by LLM model
+- `strategy_model_heatmap.png` — Heatmap: Strategy × Model performance
+- `misconception_recall.png` — Bar chart: Recall by misconception category
+- `hallucinations.png` — Distribution of false positive types
+- `semantic_distribution.png` — Histogram of embedding similarity scores
+- `category_recall.png` — Recall for each Notional Machine category
 
 ---
 
 ## Environment Variables
 
+Required:
 ```bash
-# Required
-OPENROUTER_API_KEY=sk-or-...
-
-# Optional (for semantic matching)
-OPENAI_API_KEY=sk-...
+export OPENROUTER_API_KEY="sk-or-..."    # For LLM detection
+export OPENAI_API_KEY="sk-..."           # For semantic embeddings
 ```
+
+Optional:
+```bash
+export VERBOSE=true                      # Debug logging
+export CACHE_EMBEDDINGS=true             # Cache embedding lookups
+```
+
+---
+
+## Typical Workflow
+
+### Step 1: Run Ensemble Analysis
+
+```bash
+uv run python analyze.py analyze-ensemble \
+  --run-name my-experiment \
+  --ensemble-threshold 2
+```
+
+### Step 2: Check Results
+
+```bash
+# Read the markdown report
+cat runs/multi/run_my-experiment/report.md
+
+# Or parse JSON metrics
+python -m json.tool runs/multi/run_my-experiment/metrics.json | head -50
+```
+
+### Step 3: Compare Against Previous Runs
+
+```bash
+# See all runs
+ls -lh runs/multi/
+
+# Compare metrics
+diff runs/multi/run_analysis2.2/metrics.json runs/multi/run_analysis3/metrics.json
+```
+
+### Step 4: Run Ablation Study (Optional)
+
+```bash
+# Test different ensemble thresholds
+for N in 2 3 4; do
+  uv run python analyze.py analyze-ensemble \
+    --run-name ablation_n${N} \
+    --ensemble-threshold $N
+done
+
+# Compare results
+ls runs/multi/ablation_* | xargs -I {} bash -c "echo '{}:' && jq '.*.overall.f1' {}/metrics.json"
+```
+
+---
+
+## Advanced Usage
+
+### Analyzing Single Assignment Only
+
+```bash
+uv run python analyze.py analyze-ensemble \
+  --assignment a1 \
+  --run-name a1-only
+```
+
+### Custom Output Directory
+
+```bash
+mkdir -p ~/my_results
+uv run python analyze.py analyze-ensemble \
+  --output-dir ~/my_results \
+  --run-name custom-location
+```
+
+### For Paper Submission
+
+```bash
+# Generate publication-ready results with verbose logging
+uv run python analyze.py analyze-ensemble \
+  --run-name paper-submission \
+  --ensemble-threshold 2 \
+  --semantic-threshold 0.65 \
+  --noise-floor 0.55 \
+  --verbose
+```
+
+Then copy to paper appendix:
+```bash
+cp runs/multi/run_paper-submission/report.md ~/thesis/results_appendix.md
+cp -r runs/multi/run_paper-submission/assets ~/thesis/figures/
+```
+
+---
+
+## Troubleshooting
+
+### "No detections found"
+- Check that `detections/` directory exists
+- Verify detection files were created by `llm_miscons_cli.py`
+- Ensure JSON format is correct
+
+### "Embedding API key invalid"
+```bash
+export OPENAI_API_KEY="your-key-here"
+uv run python analyze.py analyze-ensemble --run-name test
+```
+
+### "Out of memory"
+- Process smaller assignments: `--assignment a1` (instead of `multi`)
+- Reduce bootstrap iterations: `--quick`
+
+### "Metrics look wrong"
+- Check `--semantic-threshold` and `--noise-floor` values
+- Verify ground truth files exist in `data/`
+- Review `results.csv` for per-file classifications
+
+---
+
+## See Also
+
+- `architecture.md` — System design overview
+- `analysis-pipeline.md` — Complete data flow
+- `metrics-guide.md` — Metrics explained (precision, recall, F1)
+- `matching.md` — Semantic alignment details
