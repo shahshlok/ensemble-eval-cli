@@ -27,34 +27,55 @@
 
 ## Immediate Next Steps (For Paper & Next Phase)
 
-### 1. Thesis Write-up — Publication Ready ✍️
-- **Status:** All analytical work complete
-- **Venue:** ITiCSE (Innovation and Technology in Computer Science Education) or SIGCSE (Technical Symposium on Computer Science Education)
-- **Deliverable:** 8-12 page peer-reviewed paper
-- **Key Contribution:** Rigorous methodology for measuring LLM "cognitive alignment" + evidence of complexity gradient (30% performance gap between simple and complex state understanding)
-- **Timeline:** Next 4-6 weeks
+### 1. Thesis Write-up — Results are Publication-Ready for ITiCSE/SIGCSE ✍️
+- **Status:** All analytical work complete and validated
+- **Venue:** ITiCSE 2026 (Innovation and Technology in Computer Science Education) or SIGCSE 2026 (Technical Symposium on Computer Science Education)
+- **Manuscript Status:** Ready to write (8-12 pages)
+- **Key Contributions:**
+  1. **Novel Methodology:** Rigorous framework for measuring LLM "Cognitive Alignment" in CS education using Notional Machines
+  2. **Complexity Gradient:** Empirical proof that LLMs have a 30% performance gap between surface errors (A3: F1=0.890) and deep state errors (A1: F1=0.592)
+  3. **Ensemble Voting Solution:** Demonstrates +107% precision improvement via consensus-based filtering
+  4. **Reproducibility:** Open-source dataset and analysis pipeline for replication studies
+- **Timeline:** 4-6 weeks to submission
+- **Supporting Materials:** 
+  - Run outputs: `runs/multi/run_analysis3/`
+  - Code: `analyze.py` with `apply_ensemble_filter()` and `analyze-ensemble` command
+  - Taxonomy: `data/*/groundtruth.json` (10 Notional Machine categories)
 
-### 2. Ablation Study — Ensemble Threshold Testing 🔍
-- **Hypothesis:** N=3 or N=4 ensemble requirements may achieve even higher precision
-- **Method:** Re-run Analysis 3 with:
-  - N ≥ 3 (strong consensus: 3 of 4 strategies agree)
-  - N ≥ 4 (unanimous: all 4 strategies agree)
-- **Expected:** Precision continues to improve, recall drops further
-- **Purpose:** Find optimal precision-recall trade-off and defend it in paper
-- **Effort:** Low (reuses existing code)
+### 2. Ablation Study — Test N=3 and N=4 Ensemble Thresholds 🔍
+- **Hypothesis:** Higher ensemble thresholds (N ≥ 3, N ≥ 4) may further improve precision at the cost of recall
+- **Method:** Re-run `analyze-ensemble` with:
+  - **Current:** N ≥ 2 (Precision 0.649, Recall 0.871, F1 0.744)
+  - **Test N ≥ 3:** Strong consensus (3 of 4 strategies agree)
+  - **Test N ≥ 4:** Unanimous (all 4 strategies agree)
+- **Expected Results:**
+  - N ≥ 3: Precision ~0.75+, Recall ~0.80, F1 ~0.77
+  - N ≥ 4: Precision ~0.90+, Recall ~0.60, F1 ~0.72
+- **Purpose:** Find optimal precision-recall trade-off for real-world deployment
+- **Effort:** Low (reuses existing code, 10 minutes to execute)
+- **Paper Impact:** "Sensitivity Analysis" section showing threshold robustness
 
-### 3. Per-Model Ensemble — Alternative Voting Scheme 🤖
-- **Hypothesis:** Maybe LLM *models* matter more than *strategies*
-- **Method:** Instead of requiring 2+ strategies to agree, require 2+ models to agree on the same misconception
-- **Test:** Does model agreement (e.g., Claude + GPT both detect it) outperform strategy agreement?
-- **Purpose:** Understand whether prompt strategy diversity or model diversity is the key to accuracy
-- **Expected Outcome:** May reveal that certain model pairs are more reliable than others
+### 3. Per-Model Ensemble — Require 2+ Models (Not Strategies) to Agree 🤖
+- **Hypothesis:** LLM *model diversity* (GPT, Claude, Gemini) may outperform *prompt strategy diversity*
+- **Method:** Modify `apply_ensemble_filter()` to group by (student, question, matched_id, model) instead of strategy
+  - Count which models detected each misconception
+  - Keep detections only if ≥2 models agree (e.g., Claude AND GPT both detect it)
+- **Comparison Matrix:**
+  - Strategy Ensemble (N ≥ 2): 0.649 precision (current)
+  - Model Ensemble (N ≥ 2 models): ? (expected: 0.70+)
+  - Hybrid: Require both ≥2 strategies AND ≥2 models
+- **Purpose:** Understand whether prompt strategy or model diversity is the primary accuracy driver
+- **Expected Insight:** May reveal that Claude + reasoning models are fundamentally more reliable
+- **Paper Impact:** "Ensemble Design Choices" section with ablations
 
-### 4. Documentation Cleanup ✂️
-- **Task:** Trim `docs/analysis3-investigation.md` (currently 651 lines)
-- **Action:** Remove pre-implementation investigation notes (old lines 207-651) that are now obsolete
-- **Keep:** Final results, methodology, and findings sections
-- **Target:** Reduce to ~300 lines (focused results document)
+### 4. Clean up Docs — Remove Pre-Implementation Planning from analysis3-investigation.md ✂️
+- **Current State:** 651 lines (methodology + results + old planning notes)
+- **Task:** Trim pre-implementation investigation notes (lines 207-651)
+  - Remove: "Semantic Pipeline Architecture", "Implementation Roadmap", "Complexity Gradient Observation"
+  - Keep: "Results", "By Assignment", "By Strategy", "Reproducing Analysis 3", "Conclusions"
+- **Target:** Reduce to ~300 lines (concise results document)
+- **Purpose:** Make documentation cleaner for paper submission
+- **Action:** Use `edit` tool to remove lines 207-651
 
 ---
 
