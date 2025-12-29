@@ -1,0 +1,257 @@
+{
+  "student": "Burnett_Kellie_610731",
+  "question": "Q4",
+  "strategy": "taxonomy",
+  "status": "success",
+  "models": {
+    "gpt-5.2-2025-12-11": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "\u201cIndexing is 1-based like human counting\u201d (off-by-one mental model)",
+          "student_thought_process": "The student believes array positions are naturally 1..N (like \u201cfirst element is position 1\u201d), and that the computer will behave correctly as long as they manually subtract 1 at each access.",
+          "conceptual_gap": "In Java, arrays are fundamentally 0-based (valid indices are 0..N-1). You *can* simulate 1-based reasoning by translating indices, but it\u2019s easy to introduce boundary/loop-direction errors because the algorithm\u2019s logic (like shifting) is usually expressed in terms of actual indices and must respect overwrite hazards. The student\u2019s model focuses on \u201chuman positions\u201d rather than the actual memory/index rules and typical shift invariants (e.g., shifting right requires iterating from the end to avoid overwriting).",
+          "error_manifestation": "Wrong output: the shift logic overwrites values and produces duplicated elements (e.g., for 1 2 3 4 it prints 4 1 1 1 instead of 4 1 2 3).",
+          "confidence": 0.83,
+          "evidence": [
+            {
+              "line_number": 22,
+              "code_snippet": "// I think of the elements as going from 1 up to arraySize, like human counting\nint currentIndex = 1;\nwhile (currentIndex <= arraySize) {"
+            },
+            {
+              "line_number": 42,
+              "code_snippet": "// The last element in human terms is at position arraySize (which is index arraySize - 1)\nint lastHumanIndex = arraySize;\nint lastArrayIndex = lastHumanIndex - 1;"
+            },
+            {
+              "line_number": 49,
+              "code_snippet": "// I will think of the positions as 1 to arraySize, and shift by using i and i+1\nint shiftingIndex = 1;\nwhile (shiftingIndex <= arraySize) {"
+            },
+            {
+              "line_number": 81,
+              "code_snippet": "// Again, I think in terms of human positions from 1 to arraySize\nint printIndex = 1;\nwhile (printIndex <= arraySize) {"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "claude-haiku-4-5-20251001": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Off-by-One Index Conversion Overhead",
+          "student_thought_process": "The student believes that thinking in 'human positions' (1-indexed) and then converting to array indices (0-indexed) using subtraction is a reliable way to handle array indexing. The student consistently applies this conversion pattern throughout the code.",
+          "conceptual_gap": "While the conversion strategy itself is not inherently wrong, the student has created unnecessary complexity and introduces a critical logic error in the shifting algorithm. The shifting loop attempts to move each element from position i-1 to position i, but this creates a cascading overwrite problem where elements get overwritten before they can be properly shifted right. The student's mental model treats each shift operation as if it happens in isolation, rather than understanding that shifting right requires either processing from right-to-left or using a temporary variable for each element.",
+          "error_manifestation": "The output will be incorrect. The shifting logic corrupts the array by overwriting values in the forward direction. For the input [1, 2, 3, 4], the result will be [4, 1, 1, 1] instead of [4, 1, 2, 3], because element at position 0 gets overwritten by element at position 0 (which was just overwritten), propagating the first element throughout.",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 37,
+              "code_snippet": "int currentIndex = 1;\n            while (currentIndex <= arraySize) {\n                int userInputValue = keyboardScanner.nextInt();\n                int arrayPositionIndex = currentIndex - 1;\n                userInputArray[arrayPositionIndex] = userInputValue;\n                currentIndex = currentIndex + 1;\n            }"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "int shiftingIndex = 1;\n            while (shiftingIndex <= arraySize) {\n                int currentArrayIndex = shiftingIndex - 1;\n                int previousHumanIndex = shiftingIndex - 1;\n                if (previousHumanIndex >= 1) {\n                    int previousArrayIndex = previousHumanIndex - 1;\n                    int temporaryHolderValue = userInputArray[previousArrayIndex];\n                    userInputArray[currentArrayIndex] = temporaryHolderValue;\n                }\n                shiftingIndex = shiftingIndex + 1;\n            }"
+            },
+            {
+              "line_number": 72,
+              "code_snippet": "int printIndex = 1;\n            while (printIndex <= arraySize) {\n                int arrayPrintIndex = printIndex - 1;\n                int valueToPrint = userInputArray[arrayPrintIndex];\n                System.out.print(valueToPrint);\n                if (printIndex != arraySize) {\n                    System.out.print(\" \");\n                }\n                printIndex = printIndex + 1;\n            }"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Right-Shift Algorithm Logic Error",
+          "student_thought_process": "The student believes that shifting right can be accomplished by iterating forward through the array and moving each element one position forward. The student stores the last element separately and then overwrites each position with the value from the previous position.",
+          "conceptual_gap": "The student has not recognized that a right shift must be performed in reverse order (from right to left) to avoid overwriting unprocessed elements. When shifting forward (left to right), each element gets overwritten before it can be copied to the next position. The correct approach requires either: (1) iterating backward from the last element to the second element, or (2) using a different temporary storage strategy. The student's mental model treats the shift operation as if each copy happens before the source is overwritten, which is not how sequential execution works.",
+          "error_manifestation": "Wrong output: The array will be corrupted with duplicate values instead of a proper right rotation. Input [1, 2, 3, 4] produces [4, 1, 1, 1] instead of [4, 1, 2, 3].",
+          "confidence": 0.92,
+          "evidence": [
+            {
+              "line_number": 54,
+              "code_snippet": "int shiftingIndex = 1;\n            while (shiftingIndex <= arraySize) {\n                int currentArrayIndex = shiftingIndex - 1;\n                int previousHumanIndex = shiftingIndex - 1;\n                if (previousHumanIndex >= 1) {\n                    int previousArrayIndex = previousHumanIndex - 1;\n                    int temporaryHolderValue = userInputArray[previousArrayIndex];\n                    userInputArray[currentArrayIndex] = temporaryHolderValue;\n                }\n                shiftingIndex = shiftingIndex + 1;\n            }"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gemini-3-flash-preview": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Sequential Overwrite Blindness",
+          "student_thought_process": "The student believes that they can shift elements to the right by iterating from the beginning to the end of the array, assuming that the value at the target index will be available for the next step of the loop even after it has been overwritten.",
+          "conceptual_gap": "The student fails to realize that the assignment operator in Java is destructive. When shifting right, if the iteration proceeds from index 0 to N, the value at index 0 overwrites index 1, and then that same value (now at index 1) overwrites index 2, causing a domino effect where a single value propagates through the entire array. To avoid this, one must either iterate backwards or use a temporary storage for every element.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 46,
+              "code_snippet": "while (shiftingIndex <= arraySize) {"
+            },
+            {
+              "line_number": 55,
+              "code_snippet": "userInputArray[currentArrayIndex] = temporaryHolderValue;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "Offset Mapping Mental Overhead",
+          "student_thought_process": "The student believes that the computer's internal storage should be accessed via human-centric counting (1 to N), and views 0-based indexing as an external constraint that must be managed by manually subtracting 1 during every array access.",
+          "conceptual_gap": "The student treats 0-based indexing as a 'translation' task rather than a fundamental property of how memory offsets work in Java. This mental overhead leads to the creation of complex 'human index' variables which obscure the logic of the algorithm, making it harder to detect the overwriting bug in the shifting loop.",
+          "error_manifestation": "logical error and increased code complexity",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 25,
+              "code_snippet": "int currentIndex = 1;"
+            },
+            {
+              "line_number": 28,
+              "code_snippet": "int arrayPositionIndex = currentIndex - 1;"
+            },
+            {
+              "line_number": 41,
+              "code_snippet": "int lastHumanIndex = arraySize;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "gpt-5.2-2025-12-11:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Human-style (1-based) array indexing mental model",
+          "student_thought_process": "The student believes array positions naturally run from 1 to N (like human counting), and that writing code using 1..N with repeated \u201c-1\u201d adjustments is essentially equivalent to thinking in Java\u2019s 0..N-1 indexing.",
+          "conceptual_gap": "Java arrays are natively 0-based. You *can* simulate 1-based indexing by constantly subtracting 1, but it increases cognitive load and makes it much easier to introduce off-by-one and boundary mistakes\u2014especially in algorithms like shifting where the direction and endpoints matter. The machine is not tracking \u201chuman positions\u201d; it only uses the actual indices you compute, so any small mismatch silently changes which element is read/written.",
+          "error_manifestation": "Often leads to off-by-one bugs or incorrect element movement; here it contributes to a faulty shift implementation (wrong final array contents).",
+          "confidence": 0.63,
+          "evidence": [
+            {
+              "line_number": 23,
+              "code_snippet": "// I think of the elements as going from 1 up to arraySize, like human counting"
+            },
+            {
+              "line_number": 24,
+              "code_snippet": "int currentIndex = 1;"
+            },
+            {
+              "line_number": 28,
+              "code_snippet": "int arrayPositionIndex = currentIndex - 1;"
+            },
+            {
+              "line_number": 37,
+              "code_snippet": "int lastHumanIndex = arraySize;"
+            },
+            {
+              "line_number": 38,
+              "code_snippet": "int lastArrayIndex = lastHumanIndex - 1;"
+            },
+            {
+              "line_number": 66,
+              "code_snippet": "// Again, I think in terms of human positions from 1 to arraySize"
+            },
+            {
+              "line_number": 67,
+              "code_snippet": "int printIndex = 1;"
+            },
+            {
+              "line_number": 69,
+              "code_snippet": "int arrayPrintIndex = printIndex - 1;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "\u201cAll-at-once\u201d array shifting (not accounting for in-place overwrites)",
+          "student_thought_process": "The student believes they can shift right by looping forward and repeatedly copying the previous element into the current slot (i-1 \u2192 i), expecting each copy to use the original, pre-shift values\u2014as if the whole shift happens simultaneously.",
+          "conceptual_gap": "In Java, assignments happen immediately and mutate the array in place. When you iterate left-to-right (in increasing index order), you overwrite elements that you will later read as sources for subsequent copies. That means later reads pull already-modified values, not the original ones. A correct in-place right shift must copy from right-to-left (decreasing index), or use a second array to avoid destructive overwrites.",
+          "error_manifestation": "Wrong output. For input [1,2,3,4], the loop makes the array become [1,1,1,1] before the final wrap assignment, resulting in [4,1,1,1] instead of [4,1,2,3].",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 43,
+              "code_snippet": "int shiftingIndex = 1;"
+            },
+            {
+              "line_number": 44,
+              "code_snippet": "while (shiftingIndex <= arraySize) {"
+            },
+            {
+              "line_number": 52,
+              "code_snippet": "int temporaryHolderValue = userInputArray[previousArrayIndex];"
+            },
+            {
+              "line_number": 53,
+              "code_snippet": "userInputArray[currentArrayIndex] = temporaryHolderValue;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    },
+    "claude-haiku-4-5-20251001:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Forward Loop In-Place Mutation Misconception",
+          "student_thought_process": "The student believes that they can perform an in-place right shift by iterating forward through the array from index 0 to N-1, copying each element from position (i-1) to position i. They think this will naturally shift all elements right without considering that in-place modifications require careful ordering to avoid losing data.",
+          "conceptual_gap": "The student does not understand that when modifying an array in-place, the order of iteration matters critically. By iterating forward and copying element at index (i-1) to index i, the student overwrites values before they have been moved to their final position. For example, userInputArray[1] = userInputArray[0] moves the first element to position 1, but then on the next iteration, userInputArray[2] = userInputArray[1] copies that same value again (not the original second element). This cascading overwrite propagates the same value across multiple positions. To correctly perform a right shift in-place, one must either iterate backward (from right to left) or use a temporary storage structure.",
+          "error_manifestation": "Wrong output. For input [1, 2, 3, 4], the program produces [4, 1, 1, 1] instead of the expected [4, 1, 2, 3].",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 46,
+              "code_snippet": "int shiftingIndex = 1;\nwhile (shiftingIndex <= arraySize) {\n    // Calculate the current array index using human-style index minus 1\n    int currentArrayIndex = shiftingIndex - 1;\n\n    // I want to move each element from position i-1 to position i\n    int previousHumanIndex = shiftingIndex - 1;\n    if (previousHumanIndex >= 1) {\n        int previousArrayIndex = previousHumanIndex - 1;\n        int temporaryHolderValue = userInputArray[previousArrayIndex];\n        userInputArray[currentArrayIndex] = temporaryHolderValue;\n    }\n    shiftingIndex = shiftingIndex + 1;\n}"
+            },
+            {
+              "line_number": 51,
+              "code_snippet": "int temporaryHolderValue = userInputArray[previousArrayIndex];\nuserInputArray[currentArrayIndex] = temporaryHolderValue;"
+            }
+          ]
+        }
+      ],
+      "count": 1
+    },
+    "gemini-3-flash-preview:reasoning": {
+      "misconceptions": [
+        {
+          "inferred_category_name": "Destructive Forward-Iteration",
+          "student_thought_process": "The student believes that they can shift elements to the right by iterating from the beginning of the array to the end, assuming the original value at each index will still be available to be moved even after the preceding element has been copied into its spot.",
+          "conceptual_gap": "In Java's execution model, assignment is immediate and destructive. When shifting right using a forward loop, the value from the first index is copied to the second, then that same value is copied to the third, effectively 'smearing' the first element across the entire array. A correct right shift requires iterating backwards or using a temporary array.",
+          "error_manifestation": "wrong output",
+          "confidence": 0.95,
+          "evidence": [
+            {
+              "line_number": 50,
+              "code_snippet": "int shiftingIndex = 1;"
+            },
+            {
+              "line_number": 54,
+              "code_snippet": "userInputArray[currentArrayIndex] = temporaryHolderValue;"
+            }
+          ]
+        },
+        {
+          "inferred_category_name": "1-Based Mental Mapping",
+          "student_thought_process": "The student believes that the 'real' positions of an array are 1 to N (human counting) and that the computer's 0-based indexing is a technicality that must be managed by manually subtracting 1 at every point of interaction with the array.",
+          "conceptual_gap": "The student fails to treat 0-based indexing as the native notional machine model for arrays. By maintaining a parallel 'human' index and a 'computer' index, they introduce unnecessary arithmetic and logical complexity, which obscures the underlying data structure behavior and increases the likelihood of off-by-one errors.",
+          "error_manifestation": "logic complexity",
+          "confidence": 0.9,
+          "evidence": [
+            {
+              "line_number": 27,
+              "code_snippet": "int currentIndex = 1;"
+            },
+            {
+              "line_number": 31,
+              "code_snippet": "int arrayPositionIndex = currentIndex - 1;"
+            },
+            {
+              "line_number": 46,
+              "code_snippet": "int lastHumanIndex = arraySize;"
+            }
+          ]
+        }
+      ],
+      "count": 2
+    }
+  },
+  "timestamp": "2025-12-29T20:20:50.138276+00:00"
+}
