@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import aiofiles
 import typer
 from dotenv import load_dotenv
 from rich import box
@@ -114,11 +115,22 @@ def get_student_list() -> list[str]:
 
 
 def load_question_text(question: str) -> str:
+    """Synchronous version for CLI commands that don't need async."""
     q_num = question.lower()
     question_file = get_questions_dir() / f"{q_num}.md"
     if not question_file.exists():
         raise FileNotFoundError(f"Question file not found: {question_file}")
     return question_file.read_text()
+
+
+async def load_question_text_async(question: str) -> str:
+    """Async version for concurrent processing."""
+    q_num = question.lower()
+    question_file = get_questions_dir() / f"{q_num}.md"
+    if not question_file.exists():
+        raise FileNotFoundError(f"Question file not found: {question_file}")
+    async with aiofiles.open(question_file, mode="r") as f:
+        return await f.read()
 
 
 async def detect_for_file(
@@ -184,8 +196,9 @@ async def process_student_question(
             }
 
         try:
-            problem_description = load_question_text(question)
-            student_code = student_file.read_text()
+            problem_description = await load_question_text_async(question)
+            async with aiofiles.open(student_file, mode="r") as f:
+                student_code = await f.read()
         except Exception as e:
             return {
                 "student": student_id,
@@ -276,7 +289,8 @@ async def run_detection(
 
                 output_file = strategy_dir / f"{result['student']}_{result['question']}.json"
                 output_file.parent.mkdir(parents=True, exist_ok=True)
-                output_file.write_text(json.dumps(result, indent=2))
+                async with aiofiles.open(output_file, mode="w") as f:
+                    await f.write(json.dumps(result, indent=2))
 
                 for model_key in result["models"]:
                     if model_key in stats["total_misconceptions"]:
@@ -294,14 +308,117 @@ async def run_detection(
 
     stats_file = strategy_dir / "_stats.json"
     stats_file.parent.mkdir(parents=True, exist_ok=True)
-    stats_file.write_text(json.dumps(stats, indent=2))
+    async with aiofiles.open(stats_file, mode="w") as f:
+        await f.write(json.dumps(stats, indent=2))
 
-    # Cleanup all LLM clients to avoid "Event loop is closed" errors
-    await openai_client.cleanup()
-    await anthropic_client.cleanup()
-    await gemini_client.cleanup()
+    # Cleanup all LLM clients in parallel to avoid "Event loop is closed" errors
+    await asyncio.gather(
+        openai_client.cleanup(),
+        anthropic_client.cleanup(),
+        gemini_client.cleanup(),
+    )
 
     return stats
+
+
+async def run_detection_no_cleanup(
+    students: list[str],
+    strategy: str,
+    output_dir: Path,
+    include_reasoning: bool = True,
+) -> dict[str, Any]:
+    """Run detection without cleaning up clients (for use in concurrent runs)."""
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+    strategy_dir = output_dir / strategy
+    strategy_dir.mkdir(parents=True, exist_ok=True)
+
+    questions = ["Q1", "Q2", "Q3", "Q4"]
+    total_tasks = len(students) * len(questions)
+
+    all_models = OPENAI_MODELS + ANTHROPIC_MODELS + GEMINI_MODELS
+    all_model_keys = list(all_models)
+    if include_reasoning:
+        all_model_keys.extend([f"{m}:reasoning" for m in all_models])
+
+    stats: dict[str, Any] = {
+        "total_processed": 0,
+        "successful": 0,
+        "skipped": 0,
+        "errors": 0,
+        "total_misconceptions": dict.fromkeys(all_model_keys, 0),
+    }
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task_id = progress.add_task(f"[cyan]Detecting ({strategy})...", total=total_tasks)
+
+        tasks = [
+            process_student_question(student_id, question, strategy, semaphore, include_reasoning)
+            for student_id in students
+            for question in questions
+        ]
+
+        for coro in asyncio.as_completed(tasks):
+            result = await coro
+            progress.advance(task_id)
+
+            stats["total_processed"] += 1
+            if result["status"] == "success":
+                stats["successful"] += 1
+
+                output_file = strategy_dir / f"{result['student']}_{result['question']}.json"
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                async with aiofiles.open(output_file, mode="w") as f:
+                    await f.write(json.dumps(result, indent=2))
+
+                for model_key in result["models"]:
+                    if model_key in stats["total_misconceptions"]:
+                        stats["total_misconceptions"][model_key] += result["models"][model_key][
+                            "count"
+                        ]
+            elif result["status"] == "skipped":
+                stats["skipped"] += 1
+            else:
+                stats["errors"] += 1
+
+    stats["strategy"] = strategy
+    stats["timestamp"] = datetime.now(timezone.utc).isoformat()
+    stats["students_processed"] = len(students)
+
+    stats_file = strategy_dir / "_stats.json"
+    stats_file.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(stats_file, mode="w") as f:
+        await f.write(json.dumps(stats, indent=2))
+
+    return stats
+
+
+async def run_all_strategies_concurrent(
+    students: list[str],
+    output_dir: Path,
+    include_reasoning: bool = True,
+) -> list[dict[str, Any]]:
+    """Run all strategies concurrently in a single event loop."""
+    tasks = [
+        run_detection_no_cleanup(students, strategy, output_dir, include_reasoning)
+        for strategy in STRATEGIES
+    ]
+    results = await asyncio.gather(*tasks)
+
+    # Cleanup all LLM clients once at the end
+    await asyncio.gather(
+        openai_client.cleanup(),
+        anthropic_client.cleanup(),
+        gemini_client.cleanup(),
+    )
+
+    return list(results)
 
 
 def create_header():
@@ -431,13 +548,16 @@ def all_strategies(
 
     console.print(create_header())
     console.print()
-    console.print(f"[bold]Running all 4 strategies on {len(student_list)} students[/bold]")
+    console.print(
+        f"[bold]Running all 4 strategies concurrently on {len(student_list)} students[/bold]"
+    )
     console.print()
 
-    for strategy in STRATEGIES:
-        console.rule(f"[bold cyan]{strategy}[/bold cyan]")
-        stats = asyncio.run(run_detection(student_list, strategy, output))
-        display_results(stats, strategy)
+    all_stats = asyncio.run(run_all_strategies_concurrent(student_list, output))
+
+    for stats in all_stats:
+        console.rule(f"[bold cyan]{stats['strategy']}[/bold cyan]")
+        display_results(stats, stats["strategy"])
         console.print()
 
     console.print("[bold green]All strategies complete![/bold green]")
