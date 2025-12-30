@@ -55,8 +55,8 @@ STRATEGIES = ["baseline", "taxonomy", "cot", "socratic"]
 
 # Reduced concurrency to avoid rate limiting on Tier 1 accounts
 # Anthropic Tier 1: 50 RPM, OpenAI/Gemini have higher limits
-# With 6 models per task, 5 concurrent tasks = 30 parallel requests max
-MAX_CONCURRENCY = 5
+# With 6 models per task, 3 concurrent tasks = 18 parallel requests max (safer for 100 students)
+MAX_CONCURRENCY = 3
 
 # Configurable assignment (default a3, can be changed via CLI)
 CURRENT_ASSIGNMENT = "a3"

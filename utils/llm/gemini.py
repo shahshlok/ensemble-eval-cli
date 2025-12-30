@@ -125,8 +125,8 @@ def _build_user_contents(messages: list[dict[str, str]]) -> list[types.Content]:
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 0.4),
+    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=4, max=60) + wait_random(0, 1),
 )
 async def get_structured_response(
     messages: list[dict[str, str]],
@@ -150,11 +150,15 @@ async def get_structured_response(
     if system_instruction:
         config.system_instruction = system_instruction
 
-    response = await _client().aio.models.generate_content(
-        model=model,
-        contents=contents,
-        config=config,
-    )
+    try:
+        response = await _client().aio.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config,
+        )
+    except Exception as e:
+        # Re-raise to trigger tenacity retry
+        raise e
 
     if response.text is None:
         raise ValueError("Gemini response missing text output")
@@ -163,8 +167,8 @@ async def get_structured_response(
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10) + wait_random(0, 0.4),
+    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=4, max=60) + wait_random(0, 1),
 )
 async def get_reasoning_response(
     messages: list[dict[str, str]],
