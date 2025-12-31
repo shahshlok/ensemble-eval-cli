@@ -962,6 +962,10 @@ def generate_report(
                 "|----------|--------|---|",
             ]
         )
+        # Filter out any empty/NaN categories or zero-N rows
+        by_category = by_category[by_category["expected_category"].notna()]
+        by_category = by_category[by_category["expected_category"] != ""]
+        by_category = by_category[(by_category["tp"] + by_category["fn"]) > 0]
         by_category = by_category.sort_values("recall")
         for _, row in by_category.iterrows():
             n = row["tp"] + row["fn"]
@@ -1472,6 +1476,10 @@ def generate_multi_report(
                 "|----------|--------|---|------------|",
             ]
         )
+        # Filter out any empty/NaN categories or zero-N rows
+        by_category = by_category[by_category["expected_category"].notna()]
+        by_category = by_category[by_category["expected_category"] != ""]
+        by_category = by_category[(by_category["tp"] + by_category["fn"]) > 0]
         by_category = by_category.sort_values("recall")
         for _, row in by_category.iterrows():
             n = row["tp"] + row["fn"]
@@ -2051,6 +2059,10 @@ def generate_ensemble_report(
                 "|----------|--------|---|------------|",
             ]
         )
+        # Filter out any empty/NaN categories or zero-N rows
+        by_category = by_category[by_category["expected_category"].notna()]
+        by_category = by_category[by_category["expected_category"] != ""]
+        by_category = by_category[(by_category["tp"] + by_category["fn"]) > 0]
         by_category = by_category.sort_values("recall")  # type: ignore
         for _, row in by_category.iterrows():
             n = row["tp"] + row["fn"]
