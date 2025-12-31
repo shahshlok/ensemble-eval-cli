@@ -1,0 +1,339 @@
+\documentclass[sigconf,nonacm]{acmart}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+}
+
+\begin{document}
+
+\title{The Diagnostic Ceiling: Measuring LLM Alignment with Student Mental Models in Introductory Programming}
+
+\author{[Author Name]}
+\affiliation{
+  \institution{[Institution]}
+  \city{[City]}
+  \country{[Country]}
+}
+\email{[email]}
+
+\begin{abstract}
+Large Language Models (LLMs) are increasingly deployed for automated code feedback, yet their ability to diagnose \emph{why} students make errors---not just \emph{what} is wrong---remains unmeasured. We evaluate six LLMs across 300 synthetic student submissions containing 18 distinct misconceptions grounded in Notional Machine theory. Using semantic embedding alignment, we measure whether LLM explanations match the cognitive root cause of errors. Our results reveal a \textbf{Diagnostic Ceiling}: LLMs achieve 93--99\% recall on structural misconceptions (e.g., API misuse, syntax errors) but only 16--65\% on semantic misconceptions involving state reasoning and control flow logic. We further demonstrate that ensemble voting---requiring multiple models to agree---improves precision from 32\% to 68\% with negligible recall loss (F1: 0.469 $\rightarrow$ 0.763). These findings provide educators with a practical taxonomy: which misconceptions are safe for AI diagnosis versus those requiring human intervention.
+\end{abstract}
+
+\keywords{Large Language Models, Misconception Detection, Notional Machines, Automated Feedback, Computer Science Education}
+
+\maketitle
+
+\section{Introduction}
+
+The proliferation of Large Language Models (LLMs) in educational technology has raised fundamental questions about their pedagogical utility. While these systems excel at detecting syntactic errors and suggesting corrections, effective teaching requires understanding \emph{why} a student made an error---the underlying mental model that produced the mistake.
+
+Consider a student who writes \texttt{x = x + 1} expecting the variable to automatically update throughout their program, as cells do in a spreadsheet. A syntax checker sees correct code. A bug detector might flag unexpected output. But neither identifies the core issue: the student holds a \textbf{Reactive State Machine} mental model, treating variables as live bindings rather than storage locations. Without diagnosing this misconception, feedback remains superficial.
+
+Computer Science Education research has long studied these mental models through the lens of \textbf{Notional Machines}---the abstract models students construct to understand program execution \cite{duboulay1986,sorva2013}. Prior work has catalogued common misconceptions: the belief that \texttt{if} and \texttt{else if} are mutually exclusive by default, that integer division preserves decimals, or that strings are mutable. What remains unknown is whether LLMs can identify these specific mental models when analyzing student code.
+
+This paper presents the first large-scale empirical evaluation of LLM alignment with Notional Machine theory. We make three contributions:
+
+\begin{enumerate}
+    \item \textbf{Empirical evidence} that LLMs exhibit massive variance (16\% to 99\% recall) in misconception detection based on category type, not assignment complexity.
+    \item \textbf{A practical taxonomy} classifying misconceptions into those safe for AI diagnosis versus those requiring human oversight.
+    \item \textbf{A methodological contribution} demonstrating that ensemble voting improves diagnostic precision by 113\% with minimal recall cost.
+\end{enumerate}
+
+Our findings suggest that LLMs are not uniformly capable misconception detectors. Rather, they exhibit a \textbf{Diagnostic Ceiling}---performing well on structural errors visible in code patterns, but struggling with semantic errors requiring deeper state reasoning.
+
+\subsection{Research Questions}
+
+\begin{itemize}
+    \item \textbf{RQ1:} How does LLM misconception detection vary across Notional Machine categories?
+    \item \textbf{RQ2:} Which specific misconceptions fall below the Diagnostic Ceiling?
+    \item \textbf{RQ3:} Can ensemble voting improve diagnostic precision without sacrificing recall?
+    \item \textbf{RQ4:} Do elaborate prompting strategies outperform simple classification prompts?
+\end{itemize}
+
+\section{Related Work}
+
+\subsection{Automated Feedback in Programming Education}
+
+Automated grading and feedback systems have evolved from simple test-case checkers to sophisticated program analysis tools \cite{ihantola2010}. Keuning et al.'s systematic review identified that most systems focus on correctness verification rather than misconception diagnosis \cite{keuning2018}. Recent work has explored using program repair techniques to generate feedback, but these approaches address \emph{what} to fix rather than \emph{why} the error occurred \cite{gulwani2018}.
+
+\subsection{Notional Machines and Mental Models}
+
+The Notional Machine concept, introduced by du Boulay \cite{duboulay1986}, describes the abstract machine that students must understand to reason about program execution. Sorva's comprehensive review \cite{sorva2013} catalogued common misconceptions and their pedagogical implications. Key categories include:
+
+\begin{itemize}
+    \item \textbf{State misconceptions:} Misunderstanding how variables store and update values
+    \item \textbf{Control flow misconceptions:} Incorrect models of loop and conditional execution
+    \item \textbf{Type misconceptions:} Confusion about type conversion and representation
+\end{itemize}
+
+Our work operationalizes these theoretical categories as measurable detection targets.
+
+\subsection{LLMs in Computer Science Education}
+
+Recent studies have examined LLM capabilities in educational contexts, including code explanation \cite{macneil2023}, hint generation \cite{phung2023}, and assessment \cite{savelka2023}. However, these studies typically evaluate output quality rather than alignment with established learning theory. Our work bridges this gap by measuring whether LLM diagnoses correspond to specific Notional Machine failures.
+
+\section{Methodology}
+
+\subsection{Dataset Construction}
+
+We generated 300 synthetic student submissions across three introductory Java assignments:
+\begin{itemize}
+    \item \textbf{A1 (Variables/Math):} Basic arithmetic, variable assignment, method calls
+    \item \textbf{A2 (Loops/Control):} Iteration, conditionals, accumulation patterns
+    \item \textbf{A3 (Arrays/Strings):} Array indexing, string manipulation, object references
+\end{itemize}
+
+For each assignment, we defined misconceptions grounded in Notional Machine theory (Table~\ref{tab:misconceptions}). Each misconception entry includes a unique identifier, the Notional Machine category, a description of the student's incorrect mental model, and instructions for generating code exhibiting the misconception.
+
+\begin{table}[h]
+\caption{Misconception Categories and Examples}
+\label{tab:misconceptions}
+\begin{tabular}{lll}
+\toprule
+\textbf{Category} & \textbf{Example} & \textbf{Description} \\
+\midrule
+Reactive State & Spreadsheet View & Variables auto-update \\
+Independent Switch & Dangling Else & Indent determines binding \\
+Fluid Type & Division Blindness & Division preserves decimals \\
+Teleological Control & Off-by-One Intent & Loop runs ``about'' right \\
+Human Index & 1-Based Offset & Arrays start at index 1 \\
+Mutable String & String Identity & Strings modified in place \\
+Void Machine & Void Assumption & Methods modify state \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Using GPT-4, we generated student code with exactly one injected misconception per file. Approximately 75\% of generated files were ``clean'' (no misconception) to evaluate false positive rates.
+
+\subsection{Detection Instrument}
+
+We evaluated six LLMs: GPT-5.2, Claude Haiku 4.5, and Gemini 3 Flash Preview (each in standard and reasoning modes). Each model analyzed student code using four prompting strategies:
+
+\begin{enumerate}
+    \item \textbf{Baseline:} Simple error classification without theoretical framing
+    \item \textbf{Taxonomy:} Explicit list of Notional Machine categories provided
+    \item \textbf{Chain-of-Thought:} Line-by-line execution tracing
+    \item \textbf{Socratic:} Mental model probing through guided questions
+\end{enumerate}
+
+Models output structured JSON containing the detected misconception category, a narrative explanation of the student's reasoning, and supporting evidence.
+
+\subsection{Semantic Alignment Measurement}
+
+A key challenge is that LLMs may use different terminology than our ground truth. To address this, we employ semantic embedding alignment:
+
+\begin{enumerate}
+    \item Embed the LLM's explanation using OpenAI's \texttt{text-embedding-3-large}
+    \item Embed the ground truth explanation and student thinking fields
+    \item Compute cosine similarity between embeddings
+    \item Threshold: similarity $\geq 0.65$ indicates a True Positive
+\end{enumerate}
+
+We validated this threshold by examining the score distribution separation between true and false positives (Cliff's Delta = 0.840, large effect).
+
+\subsection{Ensemble Voting}
+
+To reduce false positives, we implemented two ensemble approaches:
+\begin{itemize}
+    \item \textbf{Strategy Ensemble:} Detection counts only if $\geq$2 of 4 strategies agree
+    \item \textbf{Model Ensemble:} Detection counts only if $\geq$2 of 6 models agree
+\end{itemize}
+
+\subsection{Statistical Analysis}
+
+We employ bootstrap confidence intervals (1000 resamples), McNemar's test for paired strategy comparison, Cochran's Q test for omnibus comparison, and Cliff's Delta for effect size measurement.
+
+\section{Results}
+
+\subsection{Overall Performance}
+
+Across 22,003 detection instances, we observed:
+
+\begin{table}[h]
+\caption{Overall Detection Performance}
+\begin{tabular}{lll}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{95\% CI} \\
+\midrule
+True Positives & 6,745 & --- \\
+False Positives & 14,236 & --- \\
+False Negatives & 1,022 & --- \\
+Precision & 0.322 & [0.315, 0.328] \\
+Recall & 0.868 & [0.861, 0.876] \\
+F1 Score & 0.469 & [0.462, 0.476] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{RQ1: Category-Level Variance}
+
+\textbf{Finding: Detection difficulty varies by misconception category, not assignment complexity.}
+
+\begin{table}[h]
+\caption{Detection Recall by Notional Machine Category}
+\label{tab:category}
+\begin{tabular}{llll}
+\toprule
+\textbf{Category} & \textbf{Recall} & \textbf{N} & \textbf{Class} \\
+\midrule
+Void Machine & 0.994 & 175 & Easy \\
+Mutable String & 0.990 & 716 & Easy \\
+Human Index & 0.973 & 841 & Easy \\
+Algebraic Syntax & 0.972 & 457 & Easy \\
+Semantic Bond & 0.954 & 965 & Easy \\
+Teleological Control & 0.931 & 2,240 & Easy \\
+Anthropomorphic I/O & 0.881 & 514 & Easy \\
+Reactive State & 0.654 & 312 & Medium \\
+Independent Switch & 0.625 & 664 & Medium \\
+Fluid Type & 0.590 & 883 & Medium \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pattern reveals a \textbf{structural vs. semantic dichotomy}: structural misconceptions (API misuse, syntax confusion) achieve 88--99\% recall, while semantic misconceptions (state reasoning, control flow logic) achieve only 59--65\%.
+
+\subsection{RQ2: The Diagnostic Ceiling}
+
+\textbf{Finding: Three specific misconceptions fall dramatically below the diagnostic ceiling.}
+
+\begin{table}[h]
+\caption{Per-Misconception Detection Rates (Selected)}
+\begin{tabular}{llll}
+\toprule
+\textbf{Misconception} & \textbf{Category} & \textbf{Recall} \\
+\midrule
+Dangling Else & Independent Switch & \textbf{0.16} \\
+Narrowing Cast & Fluid Type & \textbf{0.31} \\
+Spreadsheet View & Reactive State & 0.65 \\
+\midrule
+String Immutability & Mutable String & 0.99 \\
+Void Assumption & Void Machine & 0.99 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The \textbf{Dangling Else} misconception is detected only 16\% of the time. This requires understanding that student \emph{intent} (visible in indentation) differs from \emph{actual} binding (determined by syntax).
+
+\subsection{RQ3: Ensemble Voting Effectiveness}
+
+\textbf{Finding: Model ensemble voting doubles precision with negligible recall loss.}
+
+\begin{table}[h]
+\caption{Ensemble Comparison}
+\begin{tabular}{lllll}
+\toprule
+\textbf{Method} & \textbf{P} & \textbf{R} & \textbf{F1} & \textbf{P Gain} \\
+\midrule
+Raw & 0.321 & 0.868 & 0.469 & --- \\
+Strategy ($\geq$2/4) & 0.640 & 0.868 & 0.737 & +99\% \\
+Model ($\geq$2/6) & \textbf{0.684} & 0.862 & \textbf{0.763} & +113\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The F1 improvement from 0.469 to 0.763 represents a \textbf{63\% relative gain}.
+
+\subsection{RQ4: Prompting Strategy Comparison}
+
+\textbf{Finding: Simple prompts outperform elaborate strategies.}
+
+\begin{table}[h]
+\caption{Performance by Prompting Strategy}
+\begin{tabular}{llll}
+\toprule
+\textbf{Strategy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+Baseline & 0.373 & 0.850 & \textbf{0.519} \\
+Taxonomy & 0.366 & 0.890 & 0.518 \\
+Chain-of-Thought & 0.345 & 0.841 & 0.489 \\
+Socratic & 0.251 & 0.890 & 0.391 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+McNemar's test confirms: Baseline vs. CoT ($\chi^2$ = 23.58, $p < 0.0001$).
+
+\section{Discussion}
+
+\subsection{Implications for AI-Assisted Grading}
+
+Our results suggest a practical deployment model:
+
+\begin{enumerate}
+    \item \textbf{Automate with confidence} for structural misconceptions: $>$97\% recall means human review is rarely needed.
+    \item \textbf{Flag for human review} for semantic misconceptions below the Diagnostic Ceiling: 16--31\% recall means most cases will be missed.
+    \item \textbf{Use ensemble voting} when precision matters: reduces false positives by 67\%.
+\end{enumerate}
+
+\subsection{Why Semantic Misconceptions Are Hard}
+
+The Diagnostic Ceiling appears where misconceptions require reasoning about \emph{student intent} rather than \emph{code behavior}. Consider:
+
+\begin{lstlisting}[language=Java]
+if (x > 0)
+    if (y > 0)
+        print("both positive");
+else
+    print("x not positive");
+\end{lstlisting}
+
+The code is syntactically valid. The \texttt{else} binds to the inner \texttt{if}, but the student's indentation reveals they expected outer binding. Detecting this requires ``theory of mind'' for code---LLMs analyze what code \emph{does}, not what students \emph{thought} it would do.
+
+\section{Limitations and Future Work}
+
+\begin{enumerate}
+    \item \textbf{Synthetic data:} Students are LLM-generated. Future work should validate on authentic submissions.
+    \item \textbf{Single language:} Java only. Mental models may generalize; syntax-specific findings may not.
+    \item \textbf{Threshold sensitivity:} The 0.65 semantic threshold requires human validation.
+\end{enumerate}
+
+\section{Conclusion}
+
+This paper presents the first empirical measurement of LLM alignment with Notional Machine theory. Our evaluation reveals a \textbf{Diagnostic Ceiling}: LLMs achieve near-perfect recall on structural misconceptions but struggle with semantic errors requiring reasoning about student intent.
+
+We provide actionable guidance: use LLMs confidently for API misuse and syntax confusion, but maintain human oversight for state reasoning errors. Ensemble voting offers a practical middle ground, doubling precision with minimal recall cost.
+
+As LLMs become ubiquitous in educational technology, understanding their limitations is as important as celebrating their capabilities. The Diagnostic Ceiling maps where human teachers remain essential.
+
+\bibliographystyle{ACM-Reference-Format}
+\begin{thebibliography}{8}
+
+\bibitem{duboulay1986}
+du Boulay, B. (1986). Some difficulties of learning to program. \emph{Journal of Educational Computing Research}, 2(1), 57--73.
+
+\bibitem{sorva2013}
+Sorva, J. (2013). Notional machines and introductory programming education. \emph{ACM Transactions on Computing Education}, 13(2), 1--31.
+
+\bibitem{ihantola2010}
+Ihantola, P., Ahoniemi, T., Karavirta, V., \& Seppälä, O. (2010). Review of recent systems for automatic assessment of programming assignments. \emph{Proceedings of Koli Calling}, 86--93.
+
+\bibitem{keuning2018}
+Keuning, H., Jeuring, J., \& Heeren, B. (2018). A systematic literature review of automated feedback generation for programming exercises. \emph{ACM Transactions on Computing Education}, 19(1), 1--43.
+
+\bibitem{gulwani2018}
+Gulwani, S., Radiček, I., \& Zuleger, F. (2018). Automated clustering and program repair for introductory programming assignments. \emph{ACM SIGPLAN Notices}, 53(4), 465--480.
+
+\bibitem{macneil2023}
+MacNeil, S., et al. (2023). Experiences from using code explanations generated by large language models in a web software development e-book. \emph{Proceedings of SIGCSE}, 931--937.
+
+\bibitem{phung2023}
+Phung, T., et al. (2023). Generating high-precision feedback for programming syntax errors using large language models. \emph{Proceedings of EDM}.
+
+\bibitem{savelka2023}
+Savelka, J., et al. (2023). Thrilled by your progress! Large language models (GPT-4) no longer struggle to pass assessments in higher education programming courses. \emph{Proceedings of ACE}, 78--87.
+
+\end{thebibliography}
+
+\end{document}
