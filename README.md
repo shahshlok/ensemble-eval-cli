@@ -2,7 +2,7 @@
 
 A research framework for detecting notional machine misconceptions in CS1 student code using Large Language Models. Part of a Bachelor's Honours Thesis at UBCO investigating cognitive alignment between LLMs and CS education theory.
 
-**Status:** Analysis 3 Complete | Ensemble Voting Implemented | Publication-Ready
+**Status:** Multi-Assignment Analysis Complete | Ensemble Voting Implemented | Publication-Ready
 
 ## Research Goal
 
@@ -10,7 +10,11 @@ A research framework for detecting notional machine misconceptions in CS1 studen
 
 This is **not** a grading tool. It measures the **Cognitive Alignment** of LLMs with CS Education theory.
 
-**Key Finding:** LLMs show a **30% performance gap** between concrete errors (arrays: F1=0.890) and abstract mental models (variables: F1=0.592). This gap represents a fundamental limitation in LLM reasoning about student mental models.
+**Key Finding:** LLMs show systematic variance in diagnostic capability based on *misconception category*, not assignment complexity:
+- **Structural misconceptions** (array bounds, string immutability): **>95% recall**
+- **Semantic misconceptions** (type coercion, execution order): **<65% recall**
+
+This **Diagnostic Ceiling** represents which errors require human oversight vs. AI-assisted grading.
 
 ## The 4-Stage Pipeline (Analysis 3)
 

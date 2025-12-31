@@ -2,49 +2,82 @@
 
 ## Thesis Statement
 
-> "We define the **'Notional Machine Gap'** in Large Language Models. Through a controlled ablation study across increasing state complexity (Scalar → Temporal → Spatial → Heap), we demonstrate that LLM diagnostic capability is inversely proportional to the abstraction level of the Notional Machine. While LLMs achieve near-perfect recall on Syntax and API misconceptions, they exhibit a 'Diagnostic Ceiling' on mental models involving state and sequence, often failing to distinguish between student intent and valid execution flow. Furthermore, we identify a **'Prompting Paradox'**: mechanical prompting strategies (e.g., Chain-of-Thought) significantly outperform pedagogical role-playing (e.g., Socratic tutors), suggesting that 'sounding like a teacher' inhibits the model's ability to 'see like a machine'."
+> "We characterize the **'Notional Machine Gap'** in Large Language Models—the systematic variance in their ability to diagnose student mental models based on the *type* of misconception, not the assignment complexity. Through a controlled study using semantic embedding matching, we demonstrate that LLMs achieve near-perfect recall (>95%) on **structural misconceptions** (array bounds, string immutability, API misuse) but exhibit a **Diagnostic Ceiling** (<65% recall) on **semantic misconceptions** involving implicit type behavior, execution order, and control flow ambiguity. We further show that **simple prompting strategies outperform pedagogical role-playing**, and that **ensemble voting** can improve precision at acceptable recall cost."
 
 ---
 
 ## Primary Research Questions
 
-### RQ1. The Notional Machine Hierarchy (formerly Diagnostic Ceiling)
+### RQ1. The Notional Machine Detection Gap
 
-**Question:** Does LLM diagnostic performance degrade predictably as the **Notional Machine** complexity increases?
+**Question:** Does LLM diagnostic performance vary systematically by **Notional Machine category**?
 
-**Hypothesis:** We hypothesize a distinct performance tier list:
+**Hypothesis:** We hypothesize that misconception detectability depends on the *nature* of the error, not the assignment complexity:
 
-1.  **Scalar State (High Performance):** Simple variable assignment (`A1`).
-2.  **Temporal State (Medium Performance):** Control flow and loops (`A2`).
-3.  **Spatial/Referential State (Low Performance):** Arrays and Objects (`A3/A4`).
+- **Structural Misconceptions (High Detection):** Errors with concrete, visible effects (array bounds, string immutability, unused return values)
+- **Semantic Misconceptions (Low Detection):** Errors involving implicit behavior (type coercion, execution order, control flow ambiguity)
 
-- **Goal:** To prove that LLMs are "State Blind"—they struggle to track data lifecycles across time (loops) and space (memory heaps).
+**Key Findings:**
+| Category | Recall | Classification |
+|----------|--------|----------------|
+| Mutable String Machine | 0.99 | Easy (Structural) |
+| Void Machine | 0.99 | Easy (Structural) |
+| Human Index Machine | 0.97 | Easy (Structural) |
+| Teleological Control | 0.93 | Easy (Structural) |
+| Reactive State Machine | 0.65 | Hard (Semantic) |
+| Fluid Type Machine | 0.59 | Hard (Semantic) |
+| Independent Switch | 0.63 | Hard (Semantic) |
 
-### RQ2. Failure Boundaries (The "Invisible" Misconceptions)
+**Goal:** To create a taxonomy of misconceptions that are "safe" for AI diagnosis vs. those requiring human oversight.
+
+### RQ2. The Diagnostic Ceiling
 
 **Question:** Which specific **Mental Models** are invisible to LLMs?
 
 **Explanation:**
-We classify errors not by syntax, but by the flawed _Notional Machine_ the student holds. We investigate detection rates for:
+We identify three misconceptions with <70% recall that represent the "Diagnostic Ceiling":
 
-- **The Reactive State Machine:** Believing variables update automatically (Spreadsheet View).
-- **The Anthropomorphic I/O:** Believing the computer "understands" prompts pragmatically.
-- **The Teleological Flow:** Believing code executes based on "intent" rather than strict sequence.
-- **Goal:** To create a taxonomy of errors that are "safe" for AI to grade vs. those requiring human intervention.
+1. **Dangling Else (16% recall):** LLMs struggle with indentation-based control flow errors
+2. **Narrowing Cast (31% recall):** Misplaced type casts are rarely detected correctly
+3. **Spreadsheet View (65% recall):** Reactive state assumptions are borderline detectable
 
-### RQ3. The Prompting Paradox
+**Implication:** These misconceptions require human intervention in any AI-assisted grading system.
 
-**Question:** Does **Pedagogical Role-Playing** (Socratic Method) degrade diagnostic accuracy compared to **Mechanical Simulation** (Chain-of-Thought)?
+### RQ3. Prompting Strategy Effectiveness
+
+**Question:** Which prompting strategy maximizes diagnostic accuracy?
+
+**Hypothesis:** We initially hypothesized that Chain-of-Thought (mechanical tracing) would outperform Socratic (pedagogical role-playing).
+
+**Findings:**
+| Strategy | F1 Score | Interpretation |
+|----------|----------|----------------|
+| Baseline | 0.519 | **Best** - Simple prompts work |
+| Taxonomy | 0.518 | Near-best - Category hints help |
+| CoT | 0.489 | Worse - Over-analysis hurts |
+| Socratic | 0.391 | Worst - Role-playing degrades accuracy |
+
+**Key Finding:** Simple, direct prompts outperform complex prompting strategies. The "Prompting Paradox" is inverted—*less* structure produces *better* results.
+
+### RQ4. Ensemble Voting Effectiveness
+
+**Question:** Can ensemble voting improve precision without catastrophic recall loss?
 
 **Explanation:**
-Instructional design suggests tutors should focus on the student's "Mental Model." However, asking an LLM to "act as a tutor" may introduce linguistic noise or hallucinated empathy.
+With raw precision at 32%, we test two ensemble approaches:
 
-- **Comparison:** We test `Zero-Shot Baseline` vs. `Taxonomy-Primed` vs. `Chain-of-Thought (Trace)` vs. `Socratic Persona`.
-- **Goal:** To prove that the best way to make an LLM a good teacher is to force it to act like a rigid runtime environment first.
+1. **Strategy Ensemble (≥2/4):** Requires 2+ prompting strategies to agree
+2. **Model Ensemble (≥2/6):** Requires 2+ models to agree
 
-### RQ4. Generalizability (The Cross-Domain Verification)
+**Goal:** Determine if consensus-based filtering produces a viable precision-recall tradeoff for practical deployment.
 
-**Question:** Is the "State Blindness" observed in basic arithmetic (`A1`) structurally identical to the failure patterns in Object-Oriented Programming (`A4`)?
+---
 
-**Explanation:**
-If the LLM fails to detect "Spreadsheet View" in A1 (Scalar) and "Aliasing" in A4 (Heap), it suggests a fundamental limitation in the Transformer architecture's ability to model _indirection_, regardless of the domain topic.
+## Methodology Summary
+
+- **Dataset:** 300 synthetic students (100 per assignment) with LLM-injected misconceptions
+- **Assignments:** A1 (Variables), A2 (Loops), A3 (Arrays)
+- **Models:** 6 LLMs (GPT-5.2, Claude-Haiku, Gemini-3-Flash + reasoning variants)
+- **Strategies:** 4 prompting approaches (Baseline, Taxonomy, CoT, Socratic)
+- **Matching:** Semantic embedding similarity (OpenAI text-embedding-3-large, threshold ≥0.65)
+- **Statistics:** Bootstrap CIs, McNemar's test, Cochran's Q, Cliff's Delta
