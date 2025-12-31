@@ -92,7 +92,6 @@ versus understanding *why* the student thought it was right.
 
 | Category | Recall | N | Difficulty |
 |----------|--------|---|------------|
-|  | 0.000 | 0 | **Hard** |
 | The Fluid Type Machine | 0.590 | 883 | Medium |
 | The Independent Switch | 0.625 | 664 | Medium |
 | The Reactive State Machine | 0.654 | 312 | Medium |
