@@ -247,7 +247,8 @@ def apply_strategy_ensemble_filter(
 
     # Find validated detections (>= threshold strategies agree)
     validated = {
-        key for key, strategies in agreement_map.items()
+        key
+        for key, strategies in agreement_map.items()
         if len(strategies) >= threshold and key[2] is not None
     }
 
@@ -304,7 +305,9 @@ def apply_model_ensemble_filter(
     """
     n_models = df["model"].nunique()
     if not silent:
-        console.print(f"[cyan]Applying model ensemble (threshold: {threshold}/{n_models})...[/cyan]")
+        console.print(
+            f"[cyan]Applying model ensemble (threshold: {threshold}/{n_models})...[/cyan]"
+        )
 
     # Build agreement map: (student, question, strategy, matched_id) -> set of models
     agreement_map: dict[tuple, set[str]] = {}
@@ -321,7 +324,8 @@ def apply_model_ensemble_filter(
 
     # Find validated detections (>= threshold models agree)
     validated = {
-        key for key, models in agreement_map.items()
+        key
+        for key, models in agreement_map.items()
         if len(models) >= threshold and key[3] is not None
     }
 
@@ -1658,10 +1662,11 @@ def generate_multi_report(
     lines.extend(
         [
             f"- **Best Ensemble Method:** {better} (F1 = {better_f1:.3f})",
-            f"- **Strategy Ensemble:** Requires ≥2 of 4 prompting strategies to agree on the same misconception",
-            f"- **Model Ensemble:** Requires ≥2 of 6 models to agree on the same misconception",
+            "- **Strategy Ensemble:** Requires ≥2 of 4 prompting strategies to agree on the same misconception",
+            "- **Model Ensemble:** Requires ≥2 of 6 models to agree on the same misconception",
             "",
-            "> **Key Finding:** Ensemble voting " + (
+            "> **Key Finding:** Ensemble voting "
+            + (
                 f"improves F1 by {max(strat_ens['f1_delta'], model_ens['f1_delta']):.3f} through precision gains."
                 if max(strat_ens["f1_delta"], model_ens["f1_delta"]) > 0
                 else "reduces F1, suggesting the precision-recall tradeoff is not favorable for this task."

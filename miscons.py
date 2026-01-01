@@ -129,7 +129,7 @@ async def load_question_text_async(question: str) -> str:
     question_file = get_questions_dir() / f"{q_num}.md"
     if not question_file.exists():
         raise FileNotFoundError(f"Question file not found: {question_file}")
-    async with aiofiles.open(question_file, mode="r") as f:
+    async with aiofiles.open(question_file) as f:
         return await f.read()
 
 
@@ -197,7 +197,7 @@ async def process_student_question(
 
         try:
             problem_description = await load_question_text_async(question)
-            async with aiofiles.open(student_file, mode="r") as f:
+            async with aiofiles.open(student_file) as f:
                 student_code = await f.read()
         except Exception as e:
             return {
