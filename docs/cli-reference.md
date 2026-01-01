@@ -10,7 +10,6 @@ Complete reference for all command-line tools in the framework.
 |---------|---------|
 | `uv run python analyze.py analyze-multi` | Run full analysis with semantic matching |
 | `uv run python miscons.py` | Run LLM detection on student files |
-| `uv run python pipeline.py` | Run complete pipeline (generate + detect + analyze) |
 
 ---
 
@@ -98,34 +97,6 @@ uv run python miscons.py \
     --assignment a2 \
     --strategy baseline \
     --model gpt-5.2
-```
-
----
-
-## Pipeline: `pipeline.py`
-
-Runs the complete pipeline: generate data, run detection, analyze results.
-
-```bash
-uv run python pipeline.py [OPTIONS]
-```
-
-**Options:**
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `--skip-generation` | flag | false | Skip synthetic data generation |
-| `--skip-detection` | flag | false | Skip LLM detection |
-| `--skip-analysis` | flag | false | Skip analysis |
-
-**Example:**
-
-```bash
-# Run full pipeline
-uv run python pipeline.py
-
-# Only run analysis (detection already done)
-uv run python pipeline.py --skip-generation --skip-detection
 ```
 
 ---

@@ -416,8 +416,7 @@ ensemble-eval-cli/
 │
 ├── docs/                               # DOCUMENTATION
 ├── analyze.py                          # Main analysis CLI
-├── miscons.py                          # Detection orchestrator
-└── pipeline.py                         # Full pipeline runner
+└── miscons.py                          # Detection orchestrator
 ```
 
 ---
