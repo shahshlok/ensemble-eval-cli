@@ -1,5 +1,7 @@
 <coding_guidelines>
-# AGENT GUIDANCE & ARCHITECTURE
+# TRACER: Agent Guidance & Architecture
+
+**T**axonomic **R**esearch of **A**ligned **C**ognitive **E**rror **R**ecognition
 
 This repository contains a research harness for a Bachelor's Honours Thesis targeting **ITiCSE/SIGCSE**.
 The goal is **not** to build a grading tool, but to measure the **Cognitive Alignment** of LLMs with CS Education theory—specifically, their ability to diagnose student *mental models* (Notional Machines).

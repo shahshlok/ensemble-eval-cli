@@ -1,4 +1,6 @@
-# LLM Misconception Detection Framework
+# TRACER
+
+**T**axonomic **R**esearch of **A**ligned **C**ognitive **E**rror **R**ecognition
 
 A research framework for measuring whether Large Language Models can diagnose **student mental models** (Notional Machines) in introductory programming—not just surface-level bugs. Part of a Bachelor's Honours Thesis at UBCO targeting **ITiCSE/SIGCSE**.
 
@@ -101,8 +103,8 @@ The 30% performance gap from A3 to A1 demonstrates that LLMs struggle with abstr
 
 ```bash
 # Clone repository
-git clone https://github.com/shahshlok/ensemble-eval-cli
-cd ensemble-eval-cli
+git clone https://github.com/shahshlok/tracer
+cd tracer
 
 # Install dependencies (requires uv)
 uv sync
@@ -148,7 +150,7 @@ Start here and follow the reading order:
 ## Project Structure
 
 ```
-ensemble-eval-cli/
+tracer/
 ├── data/                           # Ground truth definitions
 │   ├── a1/groundtruth.json         # 8 misconceptions (Variables/Math)
 │   ├── a2/groundtruth.json         # 6 misconceptions (Loops/Control)
@@ -222,13 +224,13 @@ ensemble-eval-cli/
 ## Citation
 
 ```bibtex
-@software{shah2025llm_misconceptions,
+@software{shah2025tracer,
   author = {Shah, Shlok},
-  title = {LLM Notional Machine Misconception Detection Framework},
+  title = {TRACER: Taxonomic Research of Aligned Cognitive Error Recognition},
   year = {2025},
   institution = {University of British Columbia Okanagan},
   note = {Honours Thesis Research Project},
-  url = {https://github.com/shahshlok/ensemble-eval-cli}
+  url = {https://github.com/shahshlok/tracer}
 }
 ```
 
