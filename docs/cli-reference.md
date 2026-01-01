@@ -227,4 +227,4 @@ open runs/multi/run_my-analysis/assets/*.png
 
 ---
 
-## Next: [Prompts](prompts.md)
+## Previous: [Complexity Gradient](complexity-gradient.md) | Next: [Prompts](prompts.md)

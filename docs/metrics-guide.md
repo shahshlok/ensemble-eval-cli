@@ -263,4 +263,4 @@ When reading `report.md`, look for:
 
 ---
 
-## Next: [Semantic Matching](matching.md)
+## Previous: [Analysis Pipeline](analysis-pipeline.md) | Next: [Matching](matching.md)

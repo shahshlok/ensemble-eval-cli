@@ -274,4 +274,4 @@ STRATEGIES = {
 
 ---
 
-## Next: [Development Guide](development.md)
+## Previous: [CLI Reference](cli-reference.md) | Next: [Development](development.md)

@@ -300,4 +300,4 @@ The 0.65 threshold balances precision and recall. Higher thresholds improve prec
 
 ---
 
-## Next: [Complexity Gradient](complexity-gradient.md)
+## Previous: [Metrics Guide](metrics-guide.md) | Next: [Complexity Gradient](complexity-gradient.md)

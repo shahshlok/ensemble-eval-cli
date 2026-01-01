@@ -270,3 +270,7 @@ Potential future work:
 3. **Confidence weighting** — Weight votes by LLM confidence
 4. **Interactive diagnosis** — Socratic dialogue with students
 5. **Misconception chains** — Track how errors propagate
+
+---
+
+## Previous: [Prompts](prompts.md) | Back to [README](../README.md)

@@ -136,17 +136,42 @@ cat runs/multi/run_my-analysis/report.md
 
 Start here and follow the reading order:
 
-| Doc | Purpose | Read Time |
-|-----|---------|-----------|
-| **[Architecture](docs/architecture.md)** | System design with data flow diagrams | 10 min |
-| **[Notional Machines](docs/notional-machines.md)** | All 17 misconceptions with code examples | 15 min |
-| **[Analysis Pipeline](docs/analysis-pipeline.md)** | How detection and matching work | 10 min |
-| **[Metrics Guide](docs/metrics-guide.md)** | Precision, Recall, F1 explained | 5 min |
-| **[Matching](docs/matching.md)** | Semantic embedding methodology | 8 min |
-| **[Complexity Gradient](docs/complexity-gradient.md)** | Core thesis finding explained | 5 min |
-| **[CLI Reference](docs/cli-reference.md)** | All commands and options | 5 min |
-| **[Prompts](docs/prompts.md)** | The 4 prompting strategies | 5 min |
-| **[Development](docs/development.md)** | Extending the framework | 5 min |
+```
+README (you are here)
+    │
+    ├──▶ 1. Architecture         ──▶ System overview, 4-stage pipeline
+    │
+    ├──▶ 2. Dataset Generation   ──▶ How synthetic data is created (GPT-5.1)
+    │
+    ├──▶ 3. Notional Machines    ──▶ The 17 misconceptions we detect
+    │
+    ├──▶ 4. Analysis Pipeline    ──▶ Detection → Matching → Metrics
+    │
+    ├──▶ 5. Metrics Guide        ──▶ Precision, Recall, F1 explained
+    │
+    ├──▶ 6. Matching             ──▶ Semantic embedding methodology
+    │
+    ├──▶ 7. Complexity Gradient  ──▶ Core thesis finding (the ceiling)
+    │
+    ├──▶ 8. CLI Reference        ──▶ All commands and options
+    │
+    ├──▶ 9. Prompts              ──▶ The 4 prompting strategies
+    │
+    └──▶ 10. Development         ──▶ Extending the framework
+```
+
+| # | Doc | Purpose | Read Time |
+|---|-----|---------|-----------| 
+| 1 | **[Architecture](docs/architecture.md)** | System design, 4-stage pipeline overview | 10 min |
+| 2 | **[Dataset Generation](docs/dataset-generation.md)** | How synthetic student data is created | 8 min |
+| 3 | **[Notional Machines](docs/notional-machines.md)** | All 17 misconceptions with code examples | 15 min |
+| 4 | **[Analysis Pipeline](docs/analysis-pipeline.md)** | Detection, matching, and evaluation flow | 10 min |
+| 5 | **[Metrics Guide](docs/metrics-guide.md)** | Precision, Recall, F1 explained | 5 min |
+| 6 | **[Matching](docs/matching.md)** | Semantic embedding methodology | 8 min |
+| 7 | **[Complexity Gradient](docs/complexity-gradient.md)** | Core thesis finding explained | 5 min |
+| 8 | **[CLI Reference](docs/cli-reference.md)** | All commands and options | 5 min |
+| 9 | **[Prompts](docs/prompts.md)** | The 4 prompting strategies | 5 min |
+| 10 | **[Development](docs/development.md)** | Extending the framework | 5 min |
 
 ---
 

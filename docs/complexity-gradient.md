@@ -239,4 +239,4 @@ The gap is remarkably consistent (std dev = 0.005), confirming it's task-level, 
 
 ---
 
-## Next: [CLI Reference](cli-reference.md)
+## Previous: [Matching](matching.md) | Next: [CLI Reference](cli-reference.md)
