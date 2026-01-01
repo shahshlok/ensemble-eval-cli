@@ -193,12 +193,11 @@ Single-strategy detection has a **68% false positive rate**. Ensemble voting fil
 
 ### Ensemble Results
 
-| Metric | Before Ensemble | After Ensemble | Improvement |
-|--------|-----------------|----------------|-------------|
-| Precision | 0.322 | **0.649** | +107% |
-| Recall | 0.868 | 0.871 | stable |
-| F1 | 0.469 | **0.744** | +61% |
-| False Positives | 14,236 | 1,164 | -92% |
+| Metric | Raw | Strategy (≥2/4) | Model (≥2/6) |
+|--------|-----|-----------------|--------------|
+| Precision | 0.322 | 0.640 (+99%) | **0.684** (+112%) |
+| Recall | 0.868 | 0.868 (stable) | 0.862 |
+| F1 | 0.469 | 0.737 (+57%) | **0.763** (+63%) |
 
 ---
 

@@ -15,8 +15,8 @@ How to extend and contribute to the framework.
 ### Installation
 
 ```bash
-git clone https://github.com/shahshlok/ensemble-eval-cli
-cd ensemble-eval-cli
+git clone https://github.com/shahshlok/tracer
+cd tracer
 uv sync
 ```
 

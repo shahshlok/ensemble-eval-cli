@@ -139,7 +139,7 @@ Start here and follow the reading order:
 | Doc | Purpose | Read Time |
 |-----|---------|-----------|
 | **[Architecture](docs/architecture.md)** | System design with data flow diagrams | 10 min |
-| **[Notional Machines](docs/notional-machines.md)** | All 18 misconceptions with code examples | 15 min |
+| **[Notional Machines](docs/notional-machines.md)** | All 17 misconceptions with code examples | 15 min |
 | **[Analysis Pipeline](docs/analysis-pipeline.md)** | How detection and matching work | 10 min |
 | **[Metrics Guide](docs/metrics-guide.md)** | Precision, Recall, F1 explained | 5 min |
 | **[Matching](docs/matching.md)** | Semantic embedding methodology | 8 min |

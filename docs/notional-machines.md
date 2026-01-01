@@ -1,6 +1,6 @@
 # Notional Machines & Misconceptions
 
-This document describes all 18 misconceptions detected by this framework, organized by their **Notional Machine** category. A Notional Machine is the mental model a student has about how code executes.
+This document describes all 17 misconceptions detected by this framework, organized by their **Notional Machine** category. A Notional Machine is the mental model a student has about how code executes.
 
 ---
 
@@ -470,24 +470,6 @@ Java uses 0-based indexing. 5 elements have indices 0-4.
 
 ---
 
-### NM_MEM_02: Index-Value Confusion
-
-The student uses the value as the index.
-
-**Buggy Code:**
-```java
-int[] arr = {10, 20, 30};
-System.out.println(arr[20]);  // Trying to access index 20!
-```
-
-**Student Thinking:**
-> "arr[20] gets the element with value 20."
-
-**Reality:**
-`arr[20]` accesses position 20, which doesn't exist.
-
----
-
 ## Category 10: The Mutable String Machine
 
 **Mental Model:** Strings can be modified in place; assignment creates a link.
@@ -534,7 +516,6 @@ Strings are immutable. Assignment copies the reference; reassigning `s2` just po
 | NM_LOGIC_01 | Mutually Exclusive Fallacy | Independent Switch | 98% | A2 |
 | NM_LOGIC_02 | Dangling Else | Independent Switch | **16%** | A2 |
 | NM_MEM_01 | Parallel Array Desync | Semantic Bond | 99% | A3 |
-| NM_MEM_02 | Index-Value Confusion | Human Index | 97% | A3 |
 | NM_MEM_03 | String Identity Trap | Mutable String | 99% | A3 |
 | NM_MEM_04 | 1-Based Offset (OOB) | Human Index | 97% | A3 |
 | NM_MEM_05 | Lossy Swap | Semantic Bond | 86% | A3 |

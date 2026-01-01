@@ -20,7 +20,8 @@ Precision = ──────────────────────�
 
 **Our Results:**
 - Raw: 0.322 (32% of detections are correct)
-- With Ensemble: **0.649** (+107% improvement)
+- With Strategy Ensemble (≥2/4): 0.640 (+99%)
+- With Model Ensemble (≥2/6): **0.684** (+112%)
 
 ---
 
@@ -38,7 +39,8 @@ Recall = ───────────────────────�
 
 **Our Results:**
 - Raw: 0.868 (87% of real bugs are found)
-- With Ensemble: 0.871 (stable)
+- With Strategy Ensemble (≥2/4): 0.868 (stable)
+- With Model Ensemble (≥2/6): 0.862 (-0.7%)
 
 ---
 
@@ -57,7 +59,8 @@ F1 = ─────────────────────────
 
 **Our Results:**
 - Raw: 0.469
-- With Ensemble: **0.744** (+61% improvement)
+- With Strategy Ensemble (≥2/4): 0.737 (+57%)
+- With Model Ensemble (≥2/6): **0.763** (+63%)
 
 ---
 
@@ -113,12 +116,13 @@ F1 = ─────────────────────────
 │  ├── Misses many real bugs                                                  │
 │  └── Example: Unanimous ensemble (N≥4)                                      │
 │                                                                             │
-│  BALANCED (Ensemble N≥2) ✓                                                  │
-│  ────────────────────────                                                    │
+│  BALANCED (Ensemble Voting) ✓                                               │
+│  ────────────────────────────                                                │
 │  "Require consensus before flagging"                                         │
-│  ├── Precision: 0.649 (acceptable)                                          │
-│  ├── Recall: 0.871 (high)                                                   │
-│  └── F1: 0.744 (good balance)                                               │
+│  Strategy Ensemble (≥2/4):          Model Ensemble (≥2/6):                  │
+│  ├── Precision: 0.640               ├── Precision: 0.684                    │
+│  ├── Recall: 0.868                  ├── Recall: 0.862                       │
+│  └── F1: 0.737                      └── F1: 0.763 ◀── BEST                  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -169,14 +173,13 @@ F1 = ─────────────────────────
 
 ## Ensemble Voting Impact
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| **Precision** | 0.322 | 0.649 | **+107%** |
-| **Recall** | 0.868 | 0.871 | stable |
-| **F1** | 0.469 | 0.744 | **+61%** |
-| **FP Count** | 14,236 | 1,164 | **-92%** |
+| Metric | Raw | Strategy (≥2/4) | Model (≥2/6) |
+|--------|-----|-----------------|--------------|
+| **Precision** | 0.322 | 0.640 (+99%) | **0.684** (+112%) |
+| **Recall** | 0.868 | 0.868 (stable) | 0.862 |
+| **F1** | 0.469 | 0.737 (+57%) | **0.763** (+63%) |
 
-**Key Insight:** Ensemble voting filters 92% of hallucinations while maintaining recall.
+**Key Insight:** Ensemble voting filters hallucinations while maintaining recall. Model Ensemble achieves highest F1.
 
 ---
 
@@ -253,10 +256,10 @@ When reading `report.md`, look for:
 | Recall | <0.50 | 0.50-0.70 | 0.70-0.85 | >0.85 |
 | F1 | <0.45 | 0.45-0.60 | 0.60-0.75 | >0.75 |
 
-**Our Final Results:**
-- Precision: 0.649 (Good)
-- Recall: 0.871 (Excellent)
-- F1: 0.744 (Good)
+**Our Final Results (Model Ensemble):**
+- Precision: 0.684 (Good)
+- Recall: 0.862 (Excellent)
+- F1: 0.763 (Excellent)
 
 ---
 

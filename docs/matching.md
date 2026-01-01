@@ -66,7 +66,7 @@ from numpy.linalg import norm
 def cosine_similarity(a, b):
     return dot(a, b) / (norm(a) * norm(b))
 
-# Compare to all 18 misconceptions
+# Compare to all 17 misconceptions
 scores = {
     "NM_STATE_01": cosine_similarity(detection_vector, gt_vectors["NM_STATE_01"]),
     "NM_IO_01": cosine_similarity(detection_vector, gt_vectors["NM_IO_01"]),
@@ -237,12 +237,11 @@ Require **consensus across strategies** before counting a detection.
 
 ### Ensemble Results
 
-| Metric | Before Ensemble | After Ensemble | Change |
-|--------|-----------------|----------------|--------|
-| Precision | 0.322 | **0.649** | +107% |
-| Recall | 0.868 | 0.871 | stable |
-| F1 | 0.469 | **0.744** | +61% |
-| False Positives | 14,236 | 1,164 | **-92%** |
+| Metric | Raw | Strategy (≥2/4) | Model (≥2/6) |
+|--------|-----|-----------------|--------------|
+| Precision | 0.322 | 0.640 (+99%) | **0.684** (+112%) |
+| Recall | 0.868 | 0.868 (stable) | 0.862 |
+| F1 | 0.469 | 0.737 (+57%) | **0.763** (+63%) |
 
 ---
 
