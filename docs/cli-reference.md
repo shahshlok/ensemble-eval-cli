@@ -135,8 +135,9 @@ uv run python pipeline.py --skip-generation --skip-detection
 ### Required
 
 ```bash
-export OPENROUTER_API_KEY="sk-or-..."    # For LLM detection
-export OPENAI_API_KEY="sk-..."           # For semantic embeddings
+export ANTHROPIC_API_KEY="sk-ant-..."    # For Claude models
+export GOOGLE_API_KEY="..."              # For Gemini models
+export OPENAI_API_KEY="sk-..."           # For GPT models & semantic embeddings
 ```
 
 ### Optional

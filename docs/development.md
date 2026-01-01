@@ -10,7 +10,7 @@ How to extend and contribute to the framework.
 
 - Python 3.12+
 - [uv](https://github.com/astral-sh/uv) package manager
-- API keys for OpenRouter and OpenAI
+- API keys for Anthropic, Google, and OpenAI
 
 ### Installation
 
@@ -23,8 +23,9 @@ uv sync
 ### Environment Variables
 
 ```bash
-export OPENROUTER_API_KEY="sk-or-..."    # For LLM detection
-export OPENAI_API_KEY="sk-..."           # For semantic embeddings
+export ANTHROPIC_API_KEY="sk-ant-..."    # For Claude models
+export GOOGLE_API_KEY="..."              # For Gemini models
+export OPENAI_API_KEY="sk-..."           # For GPT models & semantic embeddings
 ```
 
 ---
@@ -134,7 +135,7 @@ MODEL_SHORT_NAMES = {
 
 ### Step 3: Ensure API Support
 
-Models must be available via OpenRouter or have a custom client in `utils/llm/`.
+Models must have a client implementation in `utils/llm/` (anthropic.py, gemini.py, openai.py).
 
 ---
 

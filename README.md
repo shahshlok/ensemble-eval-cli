@@ -2,7 +2,7 @@
 
 **T**axonomic **R**esearch of **A**ligned **C**ognitive **E**rror **R**ecognition
 
-A research framework for measuring whether Large Language Models can diagnose **student mental models** (Notional Machines) in introductory programming—not just surface-level bugs. Part of a Bachelor's Honours Thesis at UBCO targeting **ITiCSE/SIGCSE**.
+A research framework for measuring whether Large Language Models can diagnose **student mental models** (Notional Machines) in introductory programming—not just surface-level bugs. Part of a Bachelor's Honours Thesis at UBCO.
 
 ```
                                     THE RESEARCH QUESTION
@@ -63,27 +63,29 @@ SYNTHETIC INJECTION        BLIND DETECTION           SEMANTIC ALIGNMENT     ENSE
 ───────────────────        ───────────────           ──────────────────     ───────────────
 
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐    ┌─────────────────┐
-│ groundtruth.json│       │ 6 LLMs analyze  │       │ Embed & compare │    │ ≥2 strategies   │
-│ defines 18      │──────▶│ 360 Java files  │──────▶│ LLM output vs   │───▶│ must agree      │
-│ misconceptions  │       │ with 4 prompts  │       │ ground truth    │    │ to count        │
+│ groundtruth.json│       │ 6 LLMs analyze  │       │ Embed & compare │    │ Two voting      │
+│ defines 18      │──────▶│ 360 Java files  │──────▶│ LLM output vs   │───▶│ methods tested: │
+│ misconceptions  │       │ with 4 prompts  │       │ ground truth    │    │ Strategy/Model  │
 └─────────────────┘       └─────────────────┘       └─────────────────┘    └─────────────────┘
          │                         │                         │                      │
          ▼                         ▼                         ▼                      ▼
-   300 synthetic           8,640 detection           Cosine similarity      Filtered results:
-   students with           JSON outputs              ≥0.65 = match         Precision +107%
-   known bugs                                                               F1 +61%
+   300 synthetic           8,640 detection           Cosine similarity      ┌───────────────┐
+   students with           JSON outputs              ≥0.65 = match          │Strategy: ≥2/4 │
+   known bugs                                                               │Model:   ≥2/6 │
+                                                                            └───────────────┘
 ```
 
 ---
 
 ## Final Results (run_final_analysis_100)
 
-| Metric | Raw Detection | With Ensemble | Improvement |
-|--------|---------------|---------------|-------------|
-| **Precision** | 0.322 | **0.649** | +107% |
-| **Recall** | 0.868 | **0.871** | stable |
-| **F1 Score** | 0.469 | **0.744** | +61% |
-| False Positives | 14,236 | 1,164 | -92% |
+| Metric | Raw Detection | Strategy Ensemble (≥2/4) | Model Ensemble (≥2/6) |
+|--------|---------------|--------------------------|----------------------|
+| **Precision** | 0.322 | 0.640 | **0.684** |
+| **Recall** | 0.868 | 0.868 | 0.862 |
+| **F1 Score** | 0.469 | 0.737 | **0.763** |
+
+**Best Method:** Model Ensemble achieves highest F1 (0.763) with +112% precision gain over raw detection.
 
 ### By Assignment (The Complexity Gradient)
 
@@ -110,8 +112,9 @@ cd tracer
 uv sync
 
 # Set API keys
-export OPENROUTER_API_KEY="sk-or-..."    # For LLM detection (6 models)
-export OPENAI_API_KEY="sk-..."           # For semantic embeddings
+export ANTHROPIC_API_KEY="sk-ant-..."    # For Claude models
+export GOOGLE_API_KEY="..."              # For Gemini models
+export OPENAI_API_KEY="sk-..."           # For GPT models & semantic embeddings
 ```
 
 ### Run Analysis
@@ -209,6 +212,34 @@ tracer/
 
 ---
 
+## Ensemble Voting Methods
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ENSEMBLE VOTING COMPARISON                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  STRATEGY ENSEMBLE (≥2/4)              MODEL ENSEMBLE (≥2/6)                │
+│  ─────────────────────────             ─────────────────────                │
+│                                                                             │
+│  Same student/question must            Same student/question/strategy       │
+│  have ≥2 prompting strategies          must have ≥2 models agree            │
+│  agree on the misconception            on the misconception                 │
+│                                                                             │
+│  Precision: 0.640                      Precision: 0.684  ◀── BEST           │
+│  Recall:    0.868                      Recall:    0.862                     │
+│  F1:        0.737                      F1:        0.763  ◀── BEST           │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+     Both methods trade minimal recall for major precision gains.
+     Model Ensemble performs best overall.
+```
+
+**Key Finding:** Ensemble voting improves F1 by ~63% through precision gains while maintaining recall.
+
+---
+
 ## Research Context
 
 | Field | Value |
@@ -217,7 +248,7 @@ tracer/
 | **Institution** | University of British Columbia Okanagan (UBCO) |
 | **Researcher** | Shlok Shah |
 | **Academic Year** | 2024-2025 |
-| **Target Venue** | ITiCSE / SIGCSE 2025 |
+| **Status** | In Progress |
 
 ---
 
@@ -240,7 +271,7 @@ tracer/
 
 | Issue | Solution |
 |-------|----------|
-| `API key invalid` | Check `OPENROUTER_API_KEY` and `OPENAI_API_KEY` |
+| `API key invalid` | Check `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, and `OPENAI_API_KEY` |
 | `No detections found` | Run detection first or verify `detections/` exists |
 | `Out of memory` | Use `--assignment a1` instead of `multi` |
 
